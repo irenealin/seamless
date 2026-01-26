@@ -1,41 +1,22 @@
-<<<<<<< HEAD
-# seamless
-LLP '26
-=======
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Seamless
 
-## Getting Started
+**Seamless** is a discovery and recommendation platform for private dining and event-friendly restaurants.  
+It helps users explore venues through an interactive map, curated recommendations, and **room-level details**, making it easier to plan group dining experiences without fragmented research.
 
-First, run the development server:
+This project was developed as part of **LLP ’26** (https://leanlaunchpad.stanford.edu/)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+---
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## What Seamless Does
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Interactive Map View**  
+  Browse restaurants visually using a map-based interface.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **Room-Level Discovery**  
+  View individual private dining rooms, capacities, and layouts — not just restaurants.
 
-## Learn More
+- **Smart Recommendations**  
+  Receive curated venue suggestions based on user preferences and group needs.
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
->>>>>>> 549c16c (initial basic level discovery page w/ map and recommendation)
+- ⚡ **Real-time Data**  
+  Powered by Supabase with row-level security and live querying.

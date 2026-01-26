@@ -18,5 +18,5 @@ This project was developed as part of **LLP ’26** (https://leanlaunchpad.stanf
 - **Smart Recommendations**  
   Receive curated venue suggestions based on user preferences and group needs.
 
-- ⚡ **Real-time Data**  
+- **Real-time Data**  
   Powered by Supabase with row-level security and live querying.

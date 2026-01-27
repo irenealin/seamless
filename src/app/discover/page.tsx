@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PlaceSearch } from "@/components/PlaceSearch";
 import { GoogleMapPanel } from "@/components/GoogleMapPanel";
 import { RestaurantCard } from "@/components/RestaurantCard";
@@ -89,6 +89,23 @@ export default function DiscoverPage() {
   // API response state
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<ApiResp | null>(null);
+  const [selected, setSelected] = useState<RestaurantResult | null>(null);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setSelected(null);
+    }
+    if (selected) window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selected]);
+
+  function getPhotos(item: RestaurantResult) {
+    const raw = item?.bestRoom?.room_photo_link ?? "";
+    return raw
+      .split(",")
+      .map((s: string) => s.trim())
+      .filter(Boolean);
+  }
 
   const allResults = useMemo(
     () => [...(data?.top3 ?? []), ...(data?.others ?? [])],
@@ -324,7 +341,12 @@ export default function DiscoverPage() {
             </div>
             <div className="resultsGrid">
               {data.top3.map((r, i) => (
-                <RestaurantCard key={r.restaurant_name} item={r} badge={`Top ${i + 1}`} />
+                <RestaurantCard
+                  key={r.restaurant_name}
+                  item={r}
+                  badge={`Top ${i + 1}`}
+                  onClick={() => setSelected(r)}
+                />
               ))}
             </div>
           </div>
@@ -337,7 +359,7 @@ export default function DiscoverPage() {
             </div>
             <div className="resultsGrid">
               {data.others.map((r) => (
-                <RestaurantCard key={r.restaurant_name} item={r} />
+                <RestaurantCard key={r.restaurant_name} item={r} onClick={() => setSelected(r)} />
               ))}
             </div>
           </div>
@@ -363,6 +385,79 @@ export default function DiscoverPage() {
           </div>
         )}
       </div>
+
+      {selected ? (
+        <div className="modalOverlay" onClick={() => setSelected(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modalHeader">
+              <div>
+                <div className="title">{selected.restaurant_name ?? "Restaurant"}</div>
+                <div className="small">{selected.address ?? ""}</div>
+              </div>
+              <button className="modalClose" onClick={() => setSelected(null)} aria-label="Close">
+                ✕
+              </button>
+            </div>
+
+            <div className="modalBody">
+              {getPhotos(selected)[0] ? (
+                <div className="modalHero">
+                  <img src={getPhotos(selected)[0]} alt="" />
+                </div>
+              ) : null}
+
+              <div className="modalGrid">
+                <div>
+                  <div className="small" style={{ fontWeight: 800, marginBottom: 6 }}>
+                    Best room
+                  </div>
+                  <div className="small">
+                    <b>Name:</b> {selected.bestRoom?.room_name ?? "—"}
+                  </div>
+                  <div className="small">
+                    <b>Capacity:</b> {selected.bestRoom?.seated_capacity ?? "—"} seated
+                  </div>
+                  <div className="small">
+                    <b>Min spend:</b>{" "}
+                    {selected.bestRoom?.min_spend_estimate
+                      ? `$${selected.bestRoom.min_spend_estimate}`
+                      : "—"}
+                  </div>
+                  <div className="small">
+                    <b>A/V:</b> {selected.bestRoom?.a_v ?? "—"}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="small" style={{ fontWeight: 800, marginBottom: 6 }}>
+                    Why it matches
+                  </div>
+                  {(selected.reasons ?? []).length ? (
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {(selected.reasons ?? []).map((r) => (
+                        <span key={r} className="badge">
+                          {r}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="small">No specific reasons listed.</div>
+                  )}
+                </div>
+              </div>
+
+              {(selected.roomsPreview ?? []).length ? (
+                <div style={{ marginTop: 14 }}>
+                  <div className="small" style={{ fontWeight: 800, marginBottom: 6 }}>
+                    Other rooms
+                  </div>
+                  <div className="small">{selected.roomsPreview.join(", ")}</div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -11,11 +11,31 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <div className="container">
           <header className="header">
-            <a className="brand" href="/">
-              <div className="logo">S</div>
+            <a className="landingBrand" href="/">
+              <span className="landingLogoMark" aria-hidden="true">
+                <svg viewBox="0 0 120 120" role="img">
+                  <g fill="none" stroke="currentColor" strokeWidth="3.4">
+                    <circle cx="60" cy="18" r="16" />
+                    <circle cx="60" cy="18" r="10" />
+                    <circle cx="60" cy="18" r="5" />
+                    <circle cx="60" cy="102" r="16" />
+                    <circle cx="60" cy="102" r="10" />
+                    <circle cx="60" cy="102" r="5" />
+                    <circle cx="18" cy="60" r="16" />
+                    <circle cx="18" cy="60" r="10" />
+                    <circle cx="18" cy="60" r="5" />
+                    <circle cx="102" cy="60" r="16" />
+                    <circle cx="102" cy="60" r="10" />
+                    <circle cx="102" cy="60" r="5" />
+                    <circle cx="60" cy="60" r="22" />
+                    <circle cx="60" cy="60" r="14" />
+                    <circle cx="60" cy="60" r="7" />
+                  </g>
+                </svg>
+              </span>
               <div>
-                <div className="brandTitle">Seamless</div>
-                <div className="brandSub">AI-Powered Private Dining for Corporate Events</div>
+                <div className="landingBrandTitle">Seamless</div>
+                <div className="landingBrandSub">Private dining for corporate events</div>
               </div>
             </a>
 
@@ -31,5 +51,4 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     </html>
   );
 }
-
 

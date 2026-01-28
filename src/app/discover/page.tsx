@@ -275,7 +275,7 @@ export default function DiscoverPage() {
   }, [isExplore]);
 
   return (
-    <div>
+    <div className="discoverPage">
       <div className="grid2">
         {/* LEFT: Planner */}
         <div style={{ display: "grid", gap: 16 }}>
@@ -494,7 +494,7 @@ export default function DiscoverPage() {
         <>
           {data?.top3?.length ? (
             <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
-              <div className="sectionTitle">
+              <div className="sectionTitle mutedTitle">
                 Top 3 Recommendations
               </div>
               <div className="resultsGrid">

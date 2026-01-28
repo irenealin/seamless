@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Playfair+Display:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+
 :root{
   --bg: #0f0d0b;
   --card: rgba(20,18,16,0.88);
@@ -27,6 +29,21 @@ html, body{
     var(--bg);
   font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, "Times New Roman", serif;
   letter-spacing: 0.1px;
+}
+
+body:has(.landingPage){
+  background: #F6F3EE;
+  color: #0A0A0A;
+}
+body:has(.landingPage) > .container{
+  max-width: 100%;
+  padding: 0;
+}
+body:has(.landingPage) .header{
+  display: none;
+}
+body:has(.landingPage) .section{
+  margin-top: 0;
 }
 
 a{ color: inherit; text-decoration: none; }
@@ -411,4 +428,246 @@ a{ color: inherit; text-decoration: none; }
 }
 @media (min-width: 900px){
   .modalGrid{ grid-template-columns: 1fr 1fr; }
+}
+
+/* Landing page styles (scoped to avoid changing discovery UI) */
+.landingPage{
+  --landing-black: #0A0A0A;
+  --landing-charcoal: #2D2D2D;
+  --landing-gold: #D4AF37;
+  --landing-white: #F6F3EE;
+  --landing-border: transparent;
+  --landing-shadow: 0 18px 40px rgba(10, 10, 10, 0.08);
+  color: var(--landing-black);
+  background: var(--landing-white);
+  min-height: 100vh;
+  font-family: "Styrene", "Inter", "Helvetica Neue", Arial, sans-serif;
+  position: relative;
+  overflow: hidden;
+}
+.landingPage::before,
+.landingPage::after{
+  content: "";
+  position: absolute;
+  inset: auto;
+  width: 520px;
+  height: 520px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(212,175,55,0.12) 0%, transparent 65%);
+  filter: blur(10px);
+  pointer-events: none;
+  z-index: 0;
+}
+.landingPage::before{
+  top: -180px;
+  right: -140px;
+}
+.landingPage::after{
+  bottom: -220px;
+  left: -120px;
+  background: radial-gradient(circle, rgba(183,110,121,0.12) 0%, transparent 70%);
+}
+
+.landingHeader{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding-top: 28px;
+  position: relative;
+  z-index: 1;
+}
+
+.landingBrand{
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.landingLogoMark{
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  border: none;
+  display: grid;
+  place-items: center;
+  color: var(--landing-gold);
+  background: rgba(255,255,255,0.8);
+}
+.landingLogoMark svg{ width: 44px; height: 44px; }
+
+.landingBrandTitle{
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.landingBrandSub{
+  font-size: 12px;
+  color: rgba(45, 45, 45, 0.7);
+  margin-top: 4px;
+}
+.landingHeaderSpacer{
+  width: 64px;
+  height: 64px;
+}
+
+.landingHero{
+  display: grid;
+  gap: 32px;
+  padding: 72px 24px 48px;
+  min-height: calc(100vh - 120px);
+  align-content: center;
+  position: relative;
+  z-index: 1;
+}
+.landingHeroCopy{
+  max-width: 760px;
+  margin: 0 auto;
+  text-align: center;
+}
+@media (min-width: 980px){
+  .landingHero{ grid-template-columns: 1fr; align-items: center; }
+}
+
+.landingHeroCopy h1{
+  font-size: 56px;
+  line-height: 1.06;
+  margin: 12px 0 16px;
+  letter-spacing: -0.02em;
+}
+.landingHeroCopy p{
+  font-size: 18px;
+  color: rgba(45,45,45,0.8);
+  line-height: 1.6;
+  margin: 0 0 24px;
+}
+.landingEyebrow{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.24em;
+  font-weight: 600;
+  color: var(--landing-charcoal);
+}
+
+.landingActions{
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  justify-content: center;
+}
+
+.landingBtn{
+  border-radius: 999px;
+  padding: clamp(12px, 1.6vw, 16px) clamp(22px, 2.2vw, 36px);
+  font-size: clamp(14px, 1.4vw, 18px);
+  font-weight: 600;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.landingBtnPrimary{
+  background: linear-gradient(90deg, #D4AF37 0%, #F4E4C1 100%);
+  color: var(--landing-black);
+  box-shadow: 0 10px 26px rgba(212,175,55,0.25);
+}
+.landingBtnPrimary:hover{
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 14px 32px rgba(212,175,55,0.35);
+}
+.landingMinimalGrid{
+  padding: 48px 24px 80px;
+  display: grid;
+  gap: 32px;
+  border-top: none;
+  position: relative;
+  z-index: 1;
+}
+@media (min-width: 980px){
+  .landingMinimalGrid{ grid-template-columns: repeat(2, 1fr); }
+}
+.landingMinimalGrid h2{
+  margin: 0 0 12px;
+  font-size: 36px;
+  letter-spacing: -0.01em;
+}
+.landingMinimalGrid h3{
+  margin: 0 0 14px;
+  font-size: 20px;
+}
+.landingMinimalGrid p{
+  margin: 0;
+  color: rgba(45,45,45,0.75);
+  line-height: 1.6;
+}
+.landingMinimalGrid ol{
+  margin: 0;
+  padding-left: 18px;
+  color: rgba(45,45,45,0.78);
+  line-height: 1.7;
+}
+
+.landingStepsGrid{
+  display: grid;
+  gap: 18px;
+}
+.landingStepCard{
+  padding: 22px 24px;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 16px 36px rgba(10,10,10,0.06);
+  opacity: 0;
+  transform: translateY(24px);
+  animation: landingFadeUp 0.7s ease forwards;
+}
+.landingStepCard:nth-child(2){ animation-delay: 0.15s; }
+.landingStepCard:nth-child(3){ animation-delay: 0.3s; }
+.landingStepTitle{
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: rgba(45,45,45,0.6);
+  margin-bottom: 8px;
+}
+.landingStepBody{
+  font-size: 16px;
+  color: rgba(45,45,45,0.8);
+  line-height: 1.6;
+}
+
+.landingInner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+body:has(.landingPage) {
+  background: var(--landing-white);
+}
+
+@supports (animation-timeline: view()){
+  .landingStepCard{
+    animation: landingFadeUp 0.7s ease forwards;
+    animation-timeline: view();
+    animation-range: entry 0% cover 30%;
+  }
+}
+@media (min-width: 980px){
+  .landingStepsGrid{ grid-template-columns: repeat(3, 1fr); }
+}
+
+@keyframes landingFadeUp{
+  from{ opacity: 0; transform: translateY(24px); }
+  to{ opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 768px){
+  .landingHeroCopy h1{ font-size: 40px; }
+  .landingHero{ padding-top: 48px; min-height: calc(100vh - 80px); }
 }

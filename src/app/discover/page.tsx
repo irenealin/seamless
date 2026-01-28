@@ -93,13 +93,13 @@ export default function DiscoverPage() {
 
   const [eventType, setEventType] = useState("");
   const [timeNeeded, setTimeNeeded] = useState("");
+  const [dateNeeded, setDateNeeded] = useState("");
 
   const [privacyLevel, setPrivacyLevel] = useState("");
   const [noiseLevel, setNoiseLevel] = useState("");
   const [vibe, setVibe] = useState("");
 
-  const [maxCakeFee, setMaxCakeFee] = useState("");
-  const [maxCorkageFee, setMaxCorkageFee] = useState("");
+  const [budgetType, setBudgetType] = useState<"total" | "per_head">("total");
 
   // API response state
   const [loading, setLoading] = useState(false);
@@ -178,12 +178,13 @@ export default function DiscoverPage() {
     if (noiseLevel) lines.push(`Noise: ${noiseLevel}`);
     if (vibe) lines.push(`Vibe: ${vibe}`);
     if (needsAV) lines.push("A/V: needed");
-    if (budgetTotal) lines.push(`Budget: no more than $${budgetTotal}`);
+    if (budgetTotal)
+      lines.push(
+        `Budget: no more than $${budgetTotal} (${budgetType === "per_head" ? "per head" : "total"})`
+      );
     if (eventType) lines.push(`Event type: ${eventType}`);
     if (areaLabel) lines.push(`Area: ${areaLabel}`);
     if (radiusMiles) lines.push(`Radius: ${radiusMiles} miles`);
-    if (maxCakeFee) lines.push(`Max cake fee: $${maxCakeFee}`);
-    if (maxCorkageFee) lines.push(`Max corkage fee: $${maxCorkageFee}`);
     return lines.length ? lines.join("\n") : "No specific requirements provided.";
   }
 
@@ -193,7 +194,7 @@ export default function DiscoverPage() {
       return;
     }
 
-    const dateLabel = timeNeeded || "TBD";
+    const dateLabel = dateNeeded || "TBD";
     const subject = `Private Dining at ${item.restaurant_name} - ${dateLabel}`;
     const body = `Hi ${item.restaurant_name} Team,\n\nI'm reaching out to inquire about booking a private dining room on ${dateLabel}. We’re planning an intimate dinner for a group of leaders from top tech companies and would love to host at your beautiful space.\n\nWe are looking for a private, enclosed space${
       headcount ? ` with capacity for ${headcount} guests` : ""
@@ -246,6 +247,7 @@ export default function DiscoverPage() {
     if (radiusMiles) payload.radiusMiles = Number(radiusMiles);
     if (headcount) payload.headcount = Number(headcount);
     if (budgetTotal) payload.budgetTotal = Number(budgetTotal);
+    if (budgetTotal) payload.budgetType = budgetType;
 
     if (eventType) payload.eventType = eventType;
     if (timeNeeded) payload.timeNeeded = timeNeeded;
@@ -255,9 +257,6 @@ export default function DiscoverPage() {
     if (vibe) payload.vibe = vibe;
 
     if (needsAV) payload.needsAV = true;
-
-    if (maxCakeFee) payload.maxCakeFee = Number(maxCakeFee);
-    if (maxCorkageFee) payload.maxCorkageFee = Number(maxCorkageFee);
 
     const resp = await fetch("/api/recommendations", {
       method: "POST",
@@ -276,9 +275,10 @@ export default function DiscoverPage() {
   }, [isExplore]);
 
   return (
-    <div className="grid2">
-      {/* LEFT: Planner + Results */}
-      <div style={{ display: "grid", gap: 16 }}>
+    <div>
+      <div className="grid2">
+        {/* LEFT: Planner */}
+        <div style={{ display: "grid", gap: 16 }}>
         <div className="card">
           <div className="cardInner">
             <div className="small" style={{ fontWeight: 900 }}>
@@ -328,6 +328,17 @@ export default function DiscoverPage() {
                   inputMode="numeric"
                 />
               </div>
+              <div>
+                <label className="label">Budget type</label>
+                <select
+                  className="input"
+                  value={budgetType}
+                  onChange={(e) => setBudgetType(e.target.value as "total" | "per_head")}
+                >
+                  <option value="total">Total F&amp;B min spend</option>
+                  <option value="per_head">Per head</option>
+                </select>
+              </div>
 
               <div>
                 <label className="label">Event type</label>
@@ -346,6 +357,15 @@ export default function DiscoverPage() {
                   value={timeNeeded}
                   onChange={(e) => setTimeNeeded(e.target.value)}
                   placeholder="e.g., 6pm–9pm"
+                />
+              </div>
+              <div>
+                <label className="label">Date</label>
+                <input
+                  className="input"
+                  type="date"
+                  value={dateNeeded}
+                  onChange={(e) => setDateNeeded(e.target.value)}
                 />
               </div>
 
@@ -383,28 +403,6 @@ export default function DiscoverPage() {
                   value={vibe}
                   onChange={(e) => setVibe(e.target.value)}
                   placeholder="e.g., upscale, modern, cozy"
-                />
-              </div>
-
-              <div>
-                <label className="label">Max cake fee ($)</label>
-                <input
-                  className="input"
-                  value={maxCakeFee}
-                  onChange={(e) => setMaxCakeFee(e.target.value)}
-                  placeholder="e.g., 25"
-                  inputMode="numeric"
-                />
-              </div>
-
-              <div>
-                <label className="label">Max corkage fee ($)</label>
-                <input
-                  className="input"
-                  value={maxCorkageFee}
-                  onChange={(e) => setMaxCorkageFee(e.target.value)}
-                  placeholder="e.g., 40"
-                  inputMode="numeric"
                 />
               </div>
 
@@ -451,66 +449,10 @@ export default function DiscoverPage() {
           </div>
         </div>
 
-        {/* RESULTS */}
-        {showDefaultHeader ? (
-          allSorted.length ? (
-            <div style={{ display: "grid", gap: 10 }}>
-              <div className="small" style={{ fontWeight: 900 }}>
-                {DEFAULT_AREA_LABEL}
-              </div>
-              <div className="resultsGrid">
-                {allSorted.map((r) => (
-                  <RestaurantCard
-                    key={r.restaurant_name}
-                    item={r}
-                    onClick={() => setSelected(r)}
-                  />
-                ))}
-              </div>
-            </div>
-          ) : null
-        ) : (
-          <>
-            {data?.top3?.length ? (
-              <div style={{ display: "grid", gap: 10 }}>
-                <div className="small" style={{ fontWeight: 900 }}>
-                  Top 3 recommendations
-                </div>
-                <div className="resultsGrid">
-                  {data.top3.map((r, i) => (
-                    <RestaurantCard
-                      key={r.restaurant_name}
-                      item={r}
-                      badge={`Top ${i + 1}`}
-                      onClick={() => setSelected(r)}
-                    />
-                  ))}
-                </div>
-              </div>
-            ) : null}
+        </div>
 
-            {data?.others?.length ? (
-              <div style={{ display: "grid", gap: 10 }}>
-                <div className="small" style={{ fontWeight: 900 }}>
-                  Other restaurants
-                </div>
-                <div className="resultsGrid">
-                  {data.others.map((r) => (
-                    <RestaurantCard
-                      key={r.restaurant_name}
-                      item={r}
-                      onClick={() => setSelected(r)}
-                    />
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </>
-        )}
-      </div>
-
-      {/* RIGHT: Map */}
-      <div style={{ alignSelf: "start" }}>
+        {/* RIGHT: Map */}
+        <div style={{ alignSelf: "start", display: "grid", gap: 16 }}>
         {center ? (
           <GoogleMapPanel
             center={center}
@@ -528,6 +470,64 @@ export default function DiscoverPage() {
           </div>
         )}
       </div>
+      </div>
+
+      {/* RESULTS */}
+      {showDefaultHeader ? (
+        allSorted.length ? (
+          <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
+            <div className="sectionTitle">
+              {DEFAULT_AREA_LABEL}
+            </div>
+            <div className="resultsGrid">
+              {allSorted.map((r) => (
+                <RestaurantCard
+                  key={r.restaurant_name}
+                  item={r}
+                  onClick={() => setSelected(r)}
+                />
+              ))}
+            </div>
+          </div>
+        ) : null
+      ) : (
+        <>
+          {data?.top3?.length ? (
+            <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
+              <div className="sectionTitle">
+                Top 3 Recommendations
+              </div>
+              <div className="resultsGrid">
+                {data.top3.map((r, i) => (
+                  <RestaurantCard
+                    key={r.restaurant_name}
+                    item={r}
+                    badge={`Top ${i + 1}`}
+                    onClick={() => setSelected(r)}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {data?.others?.length ? (
+            <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
+              <div className="sectionTitle">
+                Other Restaurants
+              </div>
+              <div className="resultsGrid">
+                {data.others.map((r) => (
+                  <RestaurantCard
+                    key={r.restaurant_name}
+                    item={r}
+                    onClick={() => setSelected(r)}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </>
+      )}
 
       {selected ? (
         <div className="modalOverlay" onClick={() => setSelected(null)}>

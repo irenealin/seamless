@@ -276,9 +276,10 @@ export default function DiscoverPage() {
   }, [isExplore]);
 
   return (
-    <div className="grid2">
-      {/* LEFT: Planner + Results */}
-      <div style={{ display: "grid", gap: 16 }}>
+    <div>
+      <div className="grid2">
+        {/* LEFT: Planner */}
+        <div style={{ display: "grid", gap: 16 }}>
         <div className="card">
           <div className="cardInner">
             <div className="small" style={{ fontWeight: 900 }}>
@@ -451,66 +452,10 @@ export default function DiscoverPage() {
           </div>
         </div>
 
-        {/* RESULTS */}
-        {showDefaultHeader ? (
-          allSorted.length ? (
-            <div style={{ display: "grid", gap: 10 }}>
-              <div className="small" style={{ fontWeight: 900 }}>
-                {DEFAULT_AREA_LABEL}
-              </div>
-              <div className="resultsGrid">
-                {allSorted.map((r) => (
-                  <RestaurantCard
-                    key={r.restaurant_name}
-                    item={r}
-                    onClick={() => setSelected(r)}
-                  />
-                ))}
-              </div>
-            </div>
-          ) : null
-        ) : (
-          <>
-            {data?.top3?.length ? (
-              <div style={{ display: "grid", gap: 10 }}>
-                <div className="small" style={{ fontWeight: 900 }}>
-                  Top 3 recommendations
-                </div>
-                <div className="resultsGrid">
-                  {data.top3.map((r, i) => (
-                    <RestaurantCard
-                      key={r.restaurant_name}
-                      item={r}
-                      badge={`Top ${i + 1}`}
-                      onClick={() => setSelected(r)}
-                    />
-                  ))}
-                </div>
-              </div>
-            ) : null}
+        </div>
 
-            {data?.others?.length ? (
-              <div style={{ display: "grid", gap: 10 }}>
-                <div className="small" style={{ fontWeight: 900 }}>
-                  Other restaurants
-                </div>
-                <div className="resultsGrid">
-                  {data.others.map((r) => (
-                    <RestaurantCard
-                      key={r.restaurant_name}
-                      item={r}
-                      onClick={() => setSelected(r)}
-                    />
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </>
-        )}
-      </div>
-
-      {/* RIGHT: Map */}
-      <div style={{ alignSelf: "start" }}>
+        {/* RIGHT: Map */}
+        <div style={{ alignSelf: "start", display: "grid", gap: 16 }}>
         {center ? (
           <GoogleMapPanel
             center={center}
@@ -528,6 +473,64 @@ export default function DiscoverPage() {
           </div>
         )}
       </div>
+      </div>
+
+      {/* RESULTS */}
+      {showDefaultHeader ? (
+        allSorted.length ? (
+          <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
+            <div className="sectionTitle">
+              {DEFAULT_AREA_LABEL}
+            </div>
+            <div className="resultsGrid">
+              {allSorted.map((r) => (
+                <RestaurantCard
+                  key={r.restaurant_name}
+                  item={r}
+                  onClick={() => setSelected(r)}
+                />
+              ))}
+            </div>
+          </div>
+        ) : null
+      ) : (
+        <>
+          {data?.top3?.length ? (
+            <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
+              <div className="sectionTitle">
+                Top 3 Recommendations
+              </div>
+              <div className="resultsGrid">
+                {data.top3.map((r, i) => (
+                  <RestaurantCard
+                    key={r.restaurant_name}
+                    item={r}
+                    badge={`Top ${i + 1}`}
+                    onClick={() => setSelected(r)}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {data?.others?.length ? (
+            <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
+              <div className="sectionTitle">
+                Other Restaurants
+              </div>
+              <div className="resultsGrid">
+                {data.others.map((r) => (
+                  <RestaurantCard
+                    key={r.restaurant_name}
+                    item={r}
+                    onClick={() => setSelected(r)}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </>
+      )}
 
       {selected ? (
         <div className="modalOverlay" onClick={() => setSelected(null)}>

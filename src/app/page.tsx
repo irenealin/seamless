@@ -13,9 +13,8 @@ export default function Home() {
 
         <div className="row">
           <a className="btn btnPrimary" href="/discover">Book your first event</a>
-          <a className="btn" href="/discover">Explore venues</a>
+          <a className="btn" href="/discover?mode=explore">Explore venues</a>
         </div>
-
       </div>
 
       <div className="card">

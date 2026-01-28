@@ -65,6 +65,7 @@ export async function POST(req: Request) {
         lat: best.row.lat ?? null,
         lng: best.row.lng ?? null,
         contact_email: best.row.contact_email ?? null,
+        image_paths: best.row.image_paths ?? null,
         score: best.score,
         reasons: best.reasons,
         bestRoom: {
@@ -79,6 +80,13 @@ export async function POST(req: Request) {
           menu_link: best.row.menu_link ?? null,
           room_photo_link: best.row.room_photo_link ?? null,
         },
+        rooms: g.rooms
+          .map((x) => ({
+            room_name: x.row.room_name ?? null,
+            image_paths: x.row.image_paths ?? null,
+            room_photo_link: x.row.room_photo_link ?? null,
+          }))
+          .filter((x) => x.room_name),
         roomsPreview: g.rooms
           .slice(0, 3)
           .map((x) => x.row.room_name)

@@ -9,10 +9,27 @@ export function RestaurantCard({
   badge?: string;
   onClick?: () => void;
 }) {
-  const photos = (item.bestRoom?.room_photo_link ?? "")
-    .split(",")
-    .map((s: string) => s.trim())
-    .filter(Boolean);
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const bucket = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET;
+  const makePublicUrl = (path: string) => {
+    if (!supabaseUrl || !bucket) return path;
+    const safe = encodeURIComponent(path).replace(/%2F/g, "/");
+    return `${supabaseUrl}/storage/v1/object/public/${bucket}/${safe}`;
+  };
+
+  const fromArray = (item.image_paths ?? [])
+    .map((p: string) => p.trim())
+    .filter(Boolean)
+    .map((p: string) => (p.startsWith("http") ? p : makePublicUrl(p)));
+
+  const photos =
+    fromArray.length > 0
+      ? fromArray
+      : (item.bestRoom?.room_photo_link ?? "")
+          .split(",")
+          .map((s: string) => s.trim())
+          .filter(Boolean)
+          .map((p: string) => (p.startsWith("http") ? p : makePublicUrl(p)));
 
   return (
     <div className="resultCard" onClick={onClick}>
@@ -25,7 +42,7 @@ export function RestaurantCard({
             <p className="title">{item.restaurant_name ?? item.restaurant ?? "Unknown restaurant"}</p>
             <p className="small sub">{item.address ?? ""}</p>
           </div>
-          {badge ? <div className="badge">{badge}</div> : null}
+          {badge ? <div className="badge badgeTop">{badge}</div> : null}
         </div>
 
         <div style={{ marginTop: 10, display: "grid", gap: 6 }}>
@@ -52,4 +69,3 @@ export function RestaurantCard({
     </div>
   );
 }
-

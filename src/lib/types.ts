@@ -31,4 +31,5 @@ export type RestaurantRoomRow = {
   deposit_required: string | null;
   payment_terms: string | null;
   notes: string | null;
+  image_paths: string[] | null;
 };

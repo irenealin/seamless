@@ -16,7 +16,6 @@ export default function Home() {
           <a className="btn" href="/discover">Explore venues</a>
         </div>
 
-        <div className="small">MVP: discovery & recommendations. Next: outreach and quote comparison.</div>
       </div>
 
       <div className="card">

@@ -1,9 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { PlaceSearch } from "@/components/PlaceSearch";
 import { GoogleMapPanel } from "@/components/GoogleMapPanel";
 import { RestaurantCard } from "@/components/RestaurantCard";
+
+const DEFAULT_CENTER = { lat: 37.4419, lng: -122.143 };
+const DEFAULT_AREA_LABEL = "Palo Alto, CA";
 
 type RestaurantResult = {
   restaurant_name: string;
@@ -30,6 +34,7 @@ type RestaurantResult = {
   contact_email?: string | null;
   response_time_notes?: string | null;
   room_photo_link?: string | null;
+  image_paths?: string[] | null;
 
   tax_structure?: string | null;
   service_charge_gratuity?: string | null;
@@ -53,6 +58,12 @@ type RestaurantResult = {
     menu_link?: string | null;
   };
 
+  rooms?: Array<{
+    room_name?: string | null;
+    image_paths?: string[] | null;
+    room_photo_link?: string | null;
+  }>;
+
   roomsPreview?: string[];
 };
 
@@ -66,9 +77,13 @@ type ApiResp = {
 };
 
 export default function DiscoverPage() {
+  const searchParams = useSearchParams();
+  const isExplore = searchParams.get("mode") === "explore";
   // Location (from Google Places)
-  const [center, setCenter] = useState<{ lat: number; lng: number } | null>(null);
-  const [areaLabel, setAreaLabel] = useState("");
+  const [center, setCenter] = useState<{ lat: number; lng: number } | null>(
+    isExplore ? DEFAULT_CENTER : null
+  );
+  const [areaLabel, setAreaLabel] = useState(isExplore ? DEFAULT_AREA_LABEL : "");
 
   // Filters (ALL start empty)
   const [radiusMiles, setRadiusMiles] = useState("");
@@ -90,35 +105,83 @@ export default function DiscoverPage() {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<ApiResp | null>(null);
   const [selected, setSelected] = useState<RestaurantResult | null>(null);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const [heroIndex, setHeroIndex] = useState(0);
+  const [showDefaultHeader, setShowDefaultHeader] = useState(true);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setSelected(null);
+      if (e.key === "Escape") {
+        if (lightboxSrc) setLightboxSrc(null);
+        else setSelected(null);
+      }
     }
     if (selected) window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, [selected, lightboxSrc]);
+
+  useEffect(() => {
+    setHeroIndex(0);
   }, [selected]);
 
   function getPhotos(item: RestaurantResult) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const bucket = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET;
+    const makePublicUrl = (path: string) => {
+      if (!supabaseUrl || !bucket) return path;
+      const safe = encodeURIComponent(path).replace(/%2F/g, "/");
+      return `${supabaseUrl}/storage/v1/object/public/${bucket}/${safe}`;
+    };
+
+    const fromArray = (item.image_paths ?? [])
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .map((p) => (p.startsWith("http") ? p : makePublicUrl(p)));
+
+    if (fromArray.length) return fromArray;
+
     const raw = item?.bestRoom?.room_photo_link ?? "";
     return raw
       .split(",")
       .map((s: string) => s.trim())
-      .filter(Boolean);
+      .filter(Boolean)
+      .map((p) => (p.startsWith("http") ? p : makePublicUrl(p)));
+  }
+
+  function getRoomPhotos(room: { image_paths?: string[] | null; room_photo_link?: string | null }) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const bucket = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET;
+    const makePublicUrl = (path: string) => {
+      if (!supabaseUrl || !bucket) return path;
+      const safe = encodeURIComponent(path).replace(/%2F/g, "/");
+      return `${supabaseUrl}/storage/v1/object/public/${bucket}/${safe}`;
+    };
+
+    const fromArray = (room.image_paths ?? [])
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .map((p) => (p.startsWith("http") ? p : makePublicUrl(p)));
+    if (fromArray.length) return fromArray;
+
+    const raw = room.room_photo_link ?? "";
+    return raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((p) => (p.startsWith("http") ? p : makePublicUrl(p)));
   }
 
   function buildQuoteBody() {
     const lines: string[] = [];
-    if (areaLabel) lines.push(`Area: ${areaLabel}`);
-    if (radiusMiles) lines.push(`Radius: ${radiusMiles} miles`);
-    if (headcount) lines.push(`Headcount: ${headcount}`);
-    if (budgetTotal) lines.push(`Max budget: $${budgetTotal}`);
-    if (eventType) lines.push(`Event type: ${eventType}`);
-    if (timeNeeded) lines.push(`Time needed: ${timeNeeded}`);
+    if (headcount) lines.push(`Capacity: ${headcount} guests`);
     if (privacyLevel) lines.push(`Privacy: ${privacyLevel}`);
     if (noiseLevel) lines.push(`Noise: ${noiseLevel}`);
     if (vibe) lines.push(`Vibe: ${vibe}`);
-    if (needsAV) lines.push("A/V needed: yes");
+    if (needsAV) lines.push("A/V: needed");
+    if (budgetTotal) lines.push(`Budget: no more than $${budgetTotal}`);
+    if (eventType) lines.push(`Event type: ${eventType}`);
+    if (areaLabel) lines.push(`Area: ${areaLabel}`);
+    if (radiusMiles) lines.push(`Radius: ${radiusMiles} miles`);
     if (maxCakeFee) lines.push(`Max cake fee: $${maxCakeFee}`);
     if (maxCorkageFee) lines.push(`Max corkage fee: $${maxCorkageFee}`);
     return lines.length ? lines.join("\n") : "No specific requirements provided.";
@@ -130,8 +193,11 @@ export default function DiscoverPage() {
       return;
     }
 
-    const subject = `Quote request — ${item.restaurant_name}`;
-    const body = `Hello,\n\nI'd like to request a quote for a private dining event at ${item.restaurant_name}.\n\nRequirements:\n${buildQuoteBody()}\n\nThanks,\n`;
+    const dateLabel = timeNeeded || "TBD";
+    const subject = `Private Dining at ${item.restaurant_name} - ${dateLabel}`;
+    const body = `Hi ${item.restaurant_name} Team,\n\nI'm reaching out to inquire about booking a private dining room on ${dateLabel}. We’re planning an intimate dinner for a group of leaders from top tech companies and would love to host at your beautiful space.\n\nWe are looking for a private, enclosed space${
+      headcount ? ` with capacity for ${headcount} guests` : ""
+    } at one long table (Chef’s Table style).\n\nTiming: ${timeNeeded || "TBD"}\nDetails:\n${buildQuoteBody()}\n\nPlease let me know if this date is available and if the space can accommodate our group. Thank you!\n`;
 
     const mailto = `mailto:${encodeURIComponent(
       item.contact_email
@@ -155,17 +221,27 @@ export default function DiscoverPage() {
     [allResults]
   );
 
-  async function getRecommendations() {
-    if (!center) {
+  const allSorted = useMemo(
+    () => [...allResults].sort((a, b) => a.restaurant_name.localeCompare(b.restaurant_name)),
+    [allResults]
+  );
+
+  async function getRecommendations(
+    centerOverride?: { lat: number; lng: number },
+    opts?: { isDefault?: boolean }
+  ) {
+    const activeCenter = centerOverride ?? center;
+    if (!activeCenter) {
       alert("Please select an area from the dropdown suggestions first.");
       return;
     }
+    if (!opts?.isDefault) setShowDefaultHeader(false);
 
     setLoading(true);
     setData(null);
 
     // Only send filters that the user filled in
-    const payload: any = { lat: center.lat, lng: center.lng };
+    const payload: any = { lat: activeCenter.lat, lng: activeCenter.lng };
 
     if (radiusMiles) payload.radiusMiles = Number(radiusMiles);
     if (headcount) payload.headcount = Number(headcount);
@@ -193,6 +269,11 @@ export default function DiscoverPage() {
     setData(json);
     setLoading(false);
   }
+
+  useEffect(() => {
+    if (isExplore && !data) getRecommendations(DEFAULT_CENTER, { isDefault: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isExplore]);
 
   return (
     <div className="grid2">
@@ -342,7 +423,11 @@ export default function DiscoverPage() {
             </div>
 
             <div className="row" style={{ marginTop: 12 }}>
-              <button className="btn btnPrimary" onClick={getRecommendations} disabled={loading}>
+              <button
+                className="btn btnPrimary"
+                onClick={() => getRecommendations()}
+                disabled={loading}
+              >
                 {loading ? "Searching..." : "Get recommendations"}
               </button>
 
@@ -367,44 +452,65 @@ export default function DiscoverPage() {
         </div>
 
         {/* RESULTS */}
-        {data?.top3?.length ? (
-          <div style={{ display: "grid", gap: 10 }}>
-            <div className="small" style={{ fontWeight: 900 }}>
-              Top 3 recommendations
+        {showDefaultHeader ? (
+          allSorted.length ? (
+            <div style={{ display: "grid", gap: 10 }}>
+              <div className="small" style={{ fontWeight: 900 }}>
+                {DEFAULT_AREA_LABEL}
+              </div>
+              <div className="resultsGrid">
+                {allSorted.map((r) => (
+                  <RestaurantCard
+                    key={r.restaurant_name}
+                    item={r}
+                    onClick={() => setSelected(r)}
+                  />
+                ))}
+              </div>
             </div>
-            <div className="resultsGrid">
-              {data.top3.map((r, i) => (
-                <RestaurantCard
-                  key={r.restaurant_name}
-                  item={r}
-                  badge={`Top ${i + 1}`}
-                  onClick={() => setSelected(r)}
-                />
-              ))}
-            </div>
-          </div>
-        ) : null}
+          ) : null
+        ) : (
+          <>
+            {data?.top3?.length ? (
+              <div style={{ display: "grid", gap: 10 }}>
+                <div className="small" style={{ fontWeight: 900 }}>
+                  Top 3 recommendations
+                </div>
+                <div className="resultsGrid">
+                  {data.top3.map((r, i) => (
+                    <RestaurantCard
+                      key={r.restaurant_name}
+                      item={r}
+                      badge={`Top ${i + 1}`}
+                      onClick={() => setSelected(r)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
-        {data?.others?.length ? (
-          <div style={{ display: "grid", gap: 10 }}>
-            <div className="small" style={{ fontWeight: 900 }}>
-              Other good choices
-            </div>
-            <div className="resultsGrid">
-              {data.others.map((r) => (
-                <RestaurantCard
-                  key={r.restaurant_name}
-                  item={r}
-                  onClick={() => setSelected(r)}
-                />
-              ))}
-            </div>
-          </div>
-        ) : null}
+            {data?.others?.length ? (
+              <div style={{ display: "grid", gap: 10 }}>
+                <div className="small" style={{ fontWeight: 900 }}>
+                  Other restaurants
+                </div>
+                <div className="resultsGrid">
+                  {data.others.map((r) => (
+                    <RestaurantCard
+                      key={r.restaurant_name}
+                      item={r}
+                      onClick={() => setSelected(r)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </>
+        )}
       </div>
 
       {/* RIGHT: Map */}
-      <div style={{ position: "sticky", top: 18, alignSelf: "start" }}>
+      <div style={{ alignSelf: "start" }}>
         {center ? (
           <GoogleMapPanel
             center={center}
@@ -439,7 +545,69 @@ export default function DiscoverPage() {
             <div className="modalBody">
               {getPhotos(selected)[0] ? (
                 <div className="modalHero">
-                  <img src={getPhotos(selected)[0]} alt="" />
+                  <img
+                    src={getPhotos(selected)[heroIndex] ?? getPhotos(selected)[0]}
+                    alt=""
+                    className="clickableImg"
+                    onClick={() =>
+                      setLightboxSrc(getPhotos(selected)[heroIndex] ?? getPhotos(selected)[0])
+                    }
+                  />
+                  {getPhotos(selected).length > 1 ? (
+                    <div className="heroControls">
+                      <button
+                        className="heroArrow"
+                        onClick={() =>
+                          setHeroIndex(
+                            (heroIndex - 1 + getPhotos(selected).length) %
+                              getPhotos(selected).length
+                          )
+                        }
+                        aria-label="Previous image"
+                      >
+                        ‹
+                      </button>
+                      <div className="heroCounter">
+                        {heroIndex + 1}/{getPhotos(selected).length}
+                      </div>
+                      <button
+                        className="heroArrow"
+                        onClick={() =>
+                          setHeroIndex((heroIndex + 1) % getPhotos(selected).length)
+                        }
+                        aria-label="Next image"
+                      >
+                        ›
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {getPhotos(selected).length > 1 ? (
+                <div className="heroDots">
+                  {getPhotos(selected).map((_, i) => (
+                    <button
+                      key={`dot-${i}`}
+                      className={`heroDot ${i === heroIndex ? "isActive" : ""}`}
+                      onClick={() => setHeroIndex(i)}
+                      aria-label={`Go to image ${i + 1}`}
+                    />
+                  ))}
+                </div>
+              ) : null}
+
+              {getPhotos(selected).length > 1 ? (
+                <div className="gallery">
+                  {getPhotos(selected).slice(1, 9).map((src, i) => (
+                    <img
+                      key={`${src}-${i}`}
+                      src={src}
+                      alt=""
+                      className="clickableImg"
+                      onClick={() => setLightboxSrc(src)}
+                    />
+                  ))}
                 </div>
               ) : null}
 
@@ -485,15 +653,41 @@ export default function DiscoverPage() {
 
               {(() => {
                 const bestName = selected.bestRoom?.room_name ?? "";
-                const otherRooms = (selected.roomsPreview ?? []).filter(
-                  (n) => n && n !== bestName
+                const otherRooms = (selected.rooms ?? []).filter(
+                  (r) => r.room_name && r.room_name !== bestName
                 );
                 return otherRooms.length ? (
                   <div style={{ marginTop: 14 }}>
                     <div className="small" style={{ fontWeight: 800, marginBottom: 6 }}>
                       Other rooms
                     </div>
-                    <div className="small">{otherRooms.join(", ")}</div>
+                    <div className="otherRoomsList">
+                      {otherRooms.map((room) => {
+                        const photos = getRoomPhotos(room);
+                        return (
+                          <div key={room.room_name} className="otherRoomItem">
+                            <div className="small" style={{ fontWeight: 800 }}>
+                              {room.room_name}
+                            </div>
+                            {photos.length ? (
+                              <div className="otherRoomsGallery">
+                                {photos.slice(0, 4).map((src, i) => (
+                                  <img
+                                    key={`${room.room_name}-${src}-${i}`}
+                                    src={src}
+                                    alt=""
+                                    className="clickableImg"
+                                    onClick={() => setLightboxSrc(src)}
+                                  />
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="small">No images available.</div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 ) : null;
               })()}
@@ -504,6 +698,14 @@ export default function DiscoverPage() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {lightboxSrc ? (
+        <div className="lightboxOverlay" onClick={() => setLightboxSrc(null)}>
+          <div className="lightbox" onClick={(e) => e.stopPropagation()}>
+            <img src={lightboxSrc} alt="" />
           </div>
         </div>
       ) : null}

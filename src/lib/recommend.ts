@@ -21,6 +21,7 @@ export type RestaurantRoomRow = {
   contact_email: string | null;
   response_time_notes: string | null;
   room_photo_link: string | null;
+  image_paths: string[] | null;
   tax_structure: string | null;
   service_charge_gratuity: string | null;
   cake_fee: string | null;

@@ -14,7 +14,12 @@ export function PlaceSearch({
   const [value, setValue] = useState(defaultValue);
 
   useEffect(() => {
+    setValue(defaultValue);
+  }, [defaultValue]);
+
+  useEffect(() => {
     let listener: google.maps.MapsEventListener | undefined;
+    let autocomplete: google.maps.places.Autocomplete | undefined;
 
     (async () => {
       // Load Places library (Autocomplete)
@@ -22,19 +27,19 @@ export function PlaceSearch({
 
       if (!inputRef.current) return;
 
-      const autocomplete = new google.maps.places.Autocomplete(inputRef.current, {
+      autocomplete = new google.maps.places.Autocomplete(inputRef.current, {
         types: ["geocode"],
         fields: ["geometry", "formatted_address", "name"],
       });
 
       listener = autocomplete.addListener("place_changed", () => {
-        const place = autocomplete.getPlace();
-        const loc = place.geometry?.location;
+        const place = autocomplete?.getPlace();
+        const loc = place?.geometry?.location;
         if (!loc) return;
 
         const lat = loc.lat();
         const lng = loc.lng();
-        const label = place.formatted_address || place.name || value;
+        const label = place?.formatted_address || place?.name || value;
 
         onSelect({ lat, lng, label });
       });
@@ -45,7 +50,9 @@ export function PlaceSearch({
     return () => {
       listener?.remove();
     };
-  }, [onSelect, value]);
+    // Intentionally initialize once to avoid re-binding on every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div>

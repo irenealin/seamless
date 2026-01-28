@@ -107,6 +107,39 @@ export default function DiscoverPage() {
       .filter(Boolean);
   }
 
+  function buildQuoteBody() {
+    const lines: string[] = [];
+    if (areaLabel) lines.push(`Area: ${areaLabel}`);
+    if (radiusMiles) lines.push(`Radius: ${radiusMiles} miles`);
+    if (headcount) lines.push(`Headcount: ${headcount}`);
+    if (budgetTotal) lines.push(`Max budget: $${budgetTotal}`);
+    if (eventType) lines.push(`Event type: ${eventType}`);
+    if (timeNeeded) lines.push(`Time needed: ${timeNeeded}`);
+    if (privacyLevel) lines.push(`Privacy: ${privacyLevel}`);
+    if (noiseLevel) lines.push(`Noise: ${noiseLevel}`);
+    if (vibe) lines.push(`Vibe: ${vibe}`);
+    if (needsAV) lines.push("A/V needed: yes");
+    if (maxCakeFee) lines.push(`Max cake fee: $${maxCakeFee}`);
+    if (maxCorkageFee) lines.push(`Max corkage fee: $${maxCorkageFee}`);
+    return lines.length ? lines.join("\n") : "No specific requirements provided.";
+  }
+
+  function requestQuoteDraft(item: RestaurantResult) {
+    if (!item.contact_email) {
+      alert("No contact email on file for this restaurant.");
+      return;
+    }
+
+    const subject = `Quote request — ${item.restaurant_name}`;
+    const body = `Hello,\n\nI'd like to request a quote for a private dining event at ${item.restaurant_name}.\n\nRequirements:\n${buildQuoteBody()}\n\nThanks,\n`;
+
+    const mailto = `mailto:${encodeURIComponent(
+      item.contact_email
+    )}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+    window.location.href = mailto;
+  }
+
   const allResults = useMemo(
     () => [...(data?.top3 ?? []), ...(data?.others ?? [])],
     [data]
@@ -359,7 +392,11 @@ export default function DiscoverPage() {
             </div>
             <div className="resultsGrid">
               {data.others.map((r) => (
-                <RestaurantCard key={r.restaurant_name} item={r} onClick={() => setSelected(r)} />
+                <RestaurantCard
+                  key={r.restaurant_name}
+                  item={r}
+                  onClick={() => setSelected(r)}
+                />
               ))}
             </div>
           </div>
@@ -446,14 +483,26 @@ export default function DiscoverPage() {
                 </div>
               </div>
 
-              {(selected.roomsPreview ?? []).length ? (
-                <div style={{ marginTop: 14 }}>
-                  <div className="small" style={{ fontWeight: 800, marginBottom: 6 }}>
-                    Other rooms
+              {(() => {
+                const bestName = selected.bestRoom?.room_name ?? "";
+                const otherRooms = (selected.roomsPreview ?? []).filter(
+                  (n) => n && n !== bestName
+                );
+                return otherRooms.length ? (
+                  <div style={{ marginTop: 14 }}>
+                    <div className="small" style={{ fontWeight: 800, marginBottom: 6 }}>
+                      Other rooms
+                    </div>
+                    <div className="small">{otherRooms.join(", ")}</div>
                   </div>
-                  <div className="small">{selected.roomsPreview.join(", ")}</div>
-                </div>
-              ) : null}
+                ) : null;
+              })()}
+
+              <div className="row" style={{ marginTop: 16 }}>
+                <button className="btn btnPrimary" onClick={() => requestQuoteDraft(selected)}>
+                  Request Quote
+                </button>
+              </div>
             </div>
           </div>
         </div>

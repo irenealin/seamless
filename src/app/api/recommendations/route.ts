@@ -64,6 +64,7 @@ export async function POST(req: Request) {
         address: best.row.address ?? null,
         lat: best.row.lat ?? null,
         lng: best.row.lng ?? null,
+        contact_email: best.row.contact_email ?? null,
         score: best.score,
         reasons: best.reasons,
         bestRoom: {

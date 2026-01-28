@@ -351,21 +351,21 @@ export default function DiscoverPage() {
               </div>
 
               <div>
-                <label className="label">Time needed</label>
-                <input
-                  className="input"
-                  value={timeNeeded}
-                  onChange={(e) => setTimeNeeded(e.target.value)}
-                  placeholder="e.g., 6pm–9pm"
-                />
-              </div>
-              <div>
                 <label className="label">Date</label>
                 <input
                   className="input"
                   type="date"
                   value={dateNeeded}
                   onChange={(e) => setDateNeeded(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="label">Time needed</label>
+                <input
+                  className="input"
+                  value={timeNeeded}
+                  onChange={(e) => setTimeNeeded(e.target.value)}
+                  placeholder="e.g., 6pm–9pm"
                 />
               </div>
 
@@ -494,7 +494,7 @@ export default function DiscoverPage() {
         <>
           {data?.top3?.length ? (
             <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
-              <div className="sectionTitle mutedTitle">
+              <div className="sectionTitle sectionTitleDark">
                 Top 3 Recommendations
               </div>
               <div className="resultsGrid">
@@ -512,7 +512,7 @@ export default function DiscoverPage() {
 
           {data?.others?.length ? (
             <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
-              <div className="sectionTitle">
+              <div className="sectionTitle sectionTitleDark">
                 Other Restaurants
               </div>
               <div className="resultsGrid">

@@ -9,7 +9,7 @@ import type { Requirements } from "@/lib/intakeTypes";
 
 const DEFAULT_CENTER = { lat: 37.4419, lng: -122.143 };
 const DEFAULT_AREA_LABEL = "Palo Alto, CA";
-const REQUIRED_FIELDS = ["areaLabel", "headcount", "budgetTotal", "dateNeeded", "timeNeeded"] as const;
+const REQUIRED_FIELDS = ["areaLabel", "headcount", "budgetTotal", "dateNeeded"] as const;
 const MISSING_LABELS: Record<string, string> = {
   areaLabel: "location",
   headcount: "headcount",
@@ -98,6 +98,20 @@ type ChatResponse = {
   missing: string[];
 };
 
+type SnapshotField = {
+  key: keyof Requirements | "location";
+  label: string;
+  value: string;
+  editPrompt: string;
+};
+
+function useDebouncedEffect(effect: () => void, deps: unknown[], delayMs: number) {
+  useEffect(() => {
+    const handle = setTimeout(effect, delayMs);
+    return () => clearTimeout(handle);
+  }, deps); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
 export default function DiscoverPage() {
   const searchParams = useSearchParams();
   const isExplore = searchParams.get("mode") === "explore";
@@ -119,6 +133,9 @@ export default function DiscoverPage() {
   const [missing, setMissing] = useState<string[]>([]);
   const [isComplete, setIsComplete] = useState(false);
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
+  const draftRef = useRef<HTMLTextAreaElement | null>(null);
+  const lastUpdatedRef = useRef<Requirements>({});
+  const [lastUpdatedField, setLastUpdatedField] = useState<string | null>(null);
 
   // API response state
   const [loading, setLoading] = useState(false);
@@ -204,8 +221,26 @@ export default function DiscoverPage() {
   }, [requirements]);
 
   useEffect(() => {
+    const prev = lastUpdatedRef.current;
+    const keys = Object.keys(requirements) as Array<keyof Requirements>;
+    const changed = keys.find((k) => requirements[k] !== prev[k]);
+    if (changed) {
+      setLastUpdatedField(changed);
+      const timer = setTimeout(() => setLastUpdatedField(null), 500);
+      lastUpdatedRef.current = requirements;
+      return () => clearTimeout(timer);
+    }
+    lastUpdatedRef.current = requirements;
+  }, [requirements]);
+
+  useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, isSending]);
+
+  function insertPrompt(text: string) {
+    setDraft((prev) => (prev ? `${prev}\n${text}` : text));
+    requestAnimationFrame(() => draftRef.current?.focus());
+  }
 
   function getPhotos(item: RestaurantResult) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -420,7 +455,6 @@ export default function DiscoverPage() {
     if (!opts?.isDefault) setShowDefaultHeader(false);
 
     setLoading(true);
-    setData(null);
 
     // Only send filters that the user filled in
     const payload: any = {
@@ -466,21 +500,30 @@ export default function DiscoverPage() {
     setLoading(false);
   }
 
-  useEffect(() => {
-    if (isExplore && !data) getRecommendations(DEFAULT_CENTER, { isDefault: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isExplore]);
+  const missingRequired = REQUIRED_FIELDS.filter((field) => {
+    const value = requirements[field];
+    return !value || (typeof value === "string" && value.trim() === "");
+  });
+
+  useDebouncedEffect(() => {
+    if (!center) return;
+    if (missingRequired.length) return;
+    getRecommendations();
+  }, [center?.lat, center?.lng, requirements, missingRequired.length], 450);
 
   return (
     <div className="discoverPage">
-      <div className="grid2">
+      <div className="discoverGrid">
         {/* LEFT: AI Intake Chat */}
-        <div style={{ display: "grid", gap: 16 }}>
+        <div className="stickyColumn conciergePanel" style={{ display: "grid", gap: 12 }}>
           <div className="card">
             <div className="cardInner">
-              <div className="small" style={{ fontWeight: 900 }}>
-                Describe your event — the AI concierge will extract details and ask one follow-up
-                only if needed.
+              <div style={{ display: "grid", gap: 4 }}>
+                <div style={{ fontWeight: 900 }}>AI Concierge</div>
+                <div className="small">
+                  Describe your event — location, headcount, budget, date, time, and desired vibe.
+                  I’ll ask one follow-up if needed.
+                </div>
               </div>
 
               <div
@@ -488,7 +531,7 @@ export default function DiscoverPage() {
                   marginTop: 12,
                   display: "grid",
                   gap: 10,
-                  maxHeight: 360,
+                  maxHeight: 260,
                   overflowY: "auto",
                   padding: 12,
                   borderRadius: 14,
@@ -528,10 +571,11 @@ export default function DiscoverPage() {
               <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
                 <textarea
                   className="input"
-                  rows={3}
+                  rows={2}
                   placeholder="Paste a paragraph or type a message..."
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
+                  ref={draftRef}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
@@ -555,11 +599,14 @@ export default function DiscoverPage() {
 
           <div className="card">
             <div className="cardInner">
-              <div className="small" style={{ fontWeight: 900 }}>
-                Use extracted details
-              </div>
+              <div style={{ fontWeight: 900 }}>Live Event Snapshot</div>
 
-              <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
+              <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
+                {!requirements.areaLabel ? (
+                  <div className="small" style={{ color: "var(--muted)" }}>
+                    Select a location from the dropdown to enable recommendations.
+                  </div>
+                ) : null}
                 <PlaceSearch
                   defaultValue={
                     requirements.areaLabel || (isExplore ? DEFAULT_AREA_LABEL : "")
@@ -570,80 +617,114 @@ export default function DiscoverPage() {
                   }}
                 />
 
-                <div style={{ display: "grid", gap: 8 }}>
-                  {[
-                    { label: "Headcount", value: requirements.headcount },
-                    { label: "Budget", value: requirements.budgetTotal },
-                    { label: "Date", value: requirements.dateNeeded },
-                    { label: "Time", value: requirements.timeNeeded },
-                    { label: "Radius", value: requirements.radiusMiles },
-                    { label: "Event type", value: requirements.eventType },
-                    { label: "Privacy", value: requirements.privacyLevel },
-                    { label: "Noise", value: requirements.noiseLevel },
-                    { label: "Vibe", value: requirements.vibe },
-                    { label: "Needs A/V", value: requirements.needsAV ? "Yes" : "" },
-                    { label: "Max cake fee", value: requirements.maxCakeFee },
-                    { label: "Max corkage fee", value: requirements.maxCorkageFee },
-                  ]
-                    .filter((item) => item.value)
-                    .map((item) => (
-                      <div
-                        key={item.label}
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: 10,
-                          padding: "8px 10px",
-                          borderRadius: 12,
-                          border: "1px solid var(--border)",
-                          background: "rgba(255,255,255,0.04)",
-                        }}
-                      >
-                        <div className="small" style={{ fontWeight: 700 }}>
-                          {item.label}
-                        </div>
-                        <div className="small" style={{ textAlign: "right" }}>
-                          {item.value}
-                        </div>
-                      </div>
-                    ))}
-                  {!Object.values(requirements).some((value) => value) ? (
-                    <div className="small">No extracted details yet.</div>
-                  ) : null}
-                </div>
-
-                {missing.length ? (
-                  <div className="small" style={{ color: "var(--muted)" }}>
-                    Missing: {missing.map((field) => MISSING_LABELS[field] ?? field).join(", ")}
-                  </div>
-                ) : null}
-                <div className="small">
-                  {isComplete ? "Ready to recommend." : "Waiting on key details."}
-                </div>
-
-                <div className="row" style={{ marginTop: 12 }}>
-                  <button
-                    className="btn btnPrimary"
-                    onClick={() => getRecommendations()}
-                    disabled={loading}
+                {(
+                  [
+                    {
+                      key: "location",
+                      label: "Location",
+                      value: requirements.areaLabel ?? "",
+                      editPrompt: "Set the location to SOMA, San Francisco.",
+                    },
+                    {
+                      key: "headcount",
+                      label: "Guests",
+                      value: requirements.headcount ?? "",
+                      editPrompt: "Set headcount to 12 people.",
+                    },
+                    {
+                      key: "budgetTotal",
+                      label: "Budget",
+                      value: requirements.budgetTotal ?? "",
+                      editPrompt: "Budget is around $4000 total.",
+                    },
+                    {
+                      key: "dateNeeded",
+                      label: "Date",
+                      value: requirements.dateNeeded ?? "",
+                      editPrompt: "The date is Feb 10.",
+                    },
+                    {
+                      key: "timeNeeded",
+                      label: "Time",
+                      value: requirements.timeNeeded ?? "",
+                      editPrompt: "Set time to 6:30pm.",
+                    },
+                    {
+                      key: "eventType",
+                      label: "Event type",
+                      value: requirements.eventType ?? "",
+                      editPrompt: "This is a team dinner.",
+                    },
+                    {
+                      key: "privacyLevel",
+                      label: "Privacy",
+                      value: requirements.privacyLevel ?? "",
+                      editPrompt: "We need a fully private room.",
+                    },
+                    {
+                      key: "radiusMiles",
+                      label: "Radius",
+                      value: requirements.radiusMiles ?? "",
+                      editPrompt: "Set radius to 2 miles.",
+                    },
+                    {
+                      key: "noiseLevel",
+                      label: "Noise",
+                      value: requirements.noiseLevel ?? "",
+                      editPrompt: "We want it to be quiet.",
+                    },
+                  ] as SnapshotField[]
+                ).map((row) => (
+                  <div
+                    key={row.label}
+                    className={`snapshotRow${lastUpdatedField === row.key ? " isUpdated" : ""}`}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr auto",
+                      gap: 10,
+                      padding: "8px 10px",
+                      borderRadius: 12,
+                      border: "1px solid var(--border)",
+                      background: "rgba(255,255,255,0.04)",
+                    }}
                   >
-                    {loading ? "Searching..." : "Get recommendations"}
-                  </button>
+                    <div>
+                      <div className="small" style={{ fontWeight: 700 }}>
+                        {row.label}
+                      </div>
+                      <div className="small" style={{ color: "var(--text)" }}>
+                        {row.value ? row.value : "Not specified"}
+                      </div>
+                    </div>
+                    <button
+                      className="btn btnGhost"
+                      onClick={() => insertPrompt(row.editPrompt)}
+                      aria-label={`Edit ${row.label}`}
+                    >
+                      ✎
+                    </button>
+                  </div>
+                ))}
 
-                  {data?.countRestaurants != null ? (
-                    <div className="small">
-                      Found <b>{data.countRestaurants}</b> restaurants (from{" "}
-                      <b>{data.countRooms}</b> rooms)
-                    </div>
-                  ) : data?.count != null ? (
-                    <div className="small">
-                      Scored <b>{data.count}</b> rooms
-                    </div>
-                  ) : null}
+                <div className="small" style={{ color: "var(--muted)" }}>
+                  {!requirements.areaLabel
+                    ? "Please select a location from the area/address dropdown in Live Event Snapshot to start recommendations."
+                    : missingRequired.length
+                      ? `Need: ${missingRequired.map((f) => MISSING_LABELS[f] ?? f).join(", ")}`
+                      : loading
+                        ? "Updating results…"
+                        : "Results are up to date."}
                 </div>
+                <button
+                  className="btn btnGhost"
+                  onClick={() => getRecommendations()}
+                  disabled={!center || loading}
+                >
+                  Refresh results
+                </button>
 
                 {data?.error ? (
-                  <div className="small" style={{ marginTop: 10, color: "crimson" }}>
+                  <div className="small" style={{ marginTop: 6, color: "crimson" }}>
                     Error: {data.error}
                   </div>
                 ) : null}
@@ -651,83 +732,73 @@ export default function DiscoverPage() {
             </div>
           </div>
         </div>
-{/* RIGHT: Map */}
-        <div style={{ alignSelf: "start", display: "grid", gap: 16 }}>
-        {center ? (
-          <GoogleMapPanel
-            center={center}
-            points={points}
-            onSelect={(name) => {
-              // optional: scroll to card / highlight later
-              console.log("Selected on map:", name);
-            }}
-          />
-        ) : (
-          <div className="card">
-            <div className="cardInner">
-              <div className="small">Select an area to show the map and get recommendations.</div>
+        {/* RIGHT: Map + Results */}
+        <div className="mapColumn">
+          {center ? (
+            <GoogleMapPanel
+              center={center}
+              points={points}
+              onSelect={(name) => {
+                const match = allResults.find((r) => r.restaurant_name === name) ?? null;
+                setSelected(match);
+              }}
+            />
+          ) : (
+            <div className="card">
+              <div className="cardInner">
+                <div className="small">Select an area to show the map and get recommendations.</div>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
-      </div>
+          )}
 
-      {/* RESULTS */}
-      {showDefaultHeader ? (
-        allSorted.length ? (
-          <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
-            <div className="sectionTitle">
-              {DEFAULT_AREA_LABEL}
-            </div>
-            <div className="resultsGrid">
-              {allSorted.map((r) => (
-                <RestaurantCard
-                  key={r.restaurant_name}
-                  item={r}
-                  onClick={() => setSelected(r)}
-                />
-              ))}
-            </div>
-          </div>
-        ) : null
-      ) : (
-        <>
-          {data?.top3?.length ? (
-            <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
-              <div className="sectionTitle sectionTitleDark">
-                Top 3 Recommendations
+          {showDefaultHeader ? (
+            allSorted.length ? (
+              <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
+                <div className="sectionTitle">{DEFAULT_AREA_LABEL}</div>
+                <div className="resultsGrid">
+                  {allSorted.map((r) => (
+                    <div key={r.restaurant_name} ref={setCardRef(r.restaurant_name)}>
+                      <RestaurantCard item={r} onClick={() => setSelected(r)} />
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="resultsGrid">
-                {data.top3.map((r, i) => (
-                  <RestaurantCard
-                    key={r.restaurant_name}
-                    item={r}
-                    badge={`Top ${i + 1}`}
-                    onClick={() => setSelected(r)}
-                  />
-                ))}
-              </div>
-            </div>
-          ) : null}
+            ) : null
+          ) : (
+            <>
+              {data?.top3?.length ? (
+                <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
+                  <div className="sectionTitle sectionTitleDark">Top 3 Recommendations</div>
+                  <div className="resultsGrid">
+                    {data.top3.map((r, i) => (
+                      <div key={r.restaurant_name} ref={setCardRef(r.restaurant_name)}>
+                        <RestaurantCard
+                          item={r}
+                          badge={`Top ${i + 1}`}
+                          onClick={() => setSelected(r)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
-          {data?.others?.length ? (
-            <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
-              <div className="sectionTitle sectionTitleDark">
-                Other Restaurants
-              </div>
-              <div className="resultsGrid">
-                {data.others.map((r) => (
-                  <RestaurantCard
-                    key={r.restaurant_name}
-                    item={r}
-                    onClick={() => setSelected(r)}
-                  />
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </>
-      )}
+              {data?.others?.length ? (
+                <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
+                  <div className="sectionTitle sectionTitleDark">Other Restaurants</div>
+                  <div className="resultsGrid">
+                    {data.others.map((r) => (
+                      <div key={r.restaurant_name} ref={setCardRef(r.restaurant_name)}>
+                        <RestaurantCard item={r} onClick={() => setSelected(r)} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </>
+          )}
+        </div>
+      </div>
 
       {selected ? (
         <div className="modalOverlay" onClick={() => setSelected(null)}>

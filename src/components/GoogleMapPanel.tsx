@@ -3,7 +3,14 @@
 import { useEffect, useRef } from "react";
 import { loadGoogleMaps } from "@/lib/googleMaps";
 
-type Point = { restaurant_name: string; lat: number | null; lng: number | null };
+type Point = {
+  restaurant_name: string;
+  cuisinePhrase?: string | null;
+  distanceMiles?: number | null;
+  distanceLabel?: string | null;
+  lat: number | null;
+  lng: number | null;
+};
 
 export function GoogleMapPanel({
   center,
@@ -17,6 +24,15 @@ export function GoogleMapPanel({
   const mapDivRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<Map<string, google.maps.Marker>>(new Map());
+  const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
+
+  const escapeHtml = (value: string) =>
+    value
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
 
   useEffect(() => {
     (async () => {
@@ -39,6 +55,7 @@ export function GoogleMapPanel({
       }
 
       const map = mapRef.current;
+      if (!infoWindowRef.current) infoWindowRef.current = new google.maps.InfoWindow();
 
       // Create/update markers
       const next = new Map<string, google.maps.Marker>();
@@ -53,12 +70,38 @@ export function GoogleMapPanel({
             map,
             title: p.restaurant_name,
           });
-          marker.addListener("click", () => onSelect?.(p.restaurant_name));
+          marker.addListener("click", () => {
+            const info = marker.get("info") as Point | undefined;
+            onSelect?.(info?.restaurant_name ?? p.restaurant_name);
+          });
+          marker.addListener("mouseover", () => {
+            const info = infoWindowRef.current;
+            if (!info) return;
+            const payload = (marker.get("info") as Point | undefined) ?? p;
+            const name = escapeHtml(payload.restaurant_name);
+            const cuisinePhrase = payload.cuisinePhrase
+              ? `<div style="opacity:0.9; color:#111; font-weight:500;">${escapeHtml(payload.cuisinePhrase)}</div>`
+              : "";
+            const distanceLine =
+              payload.distanceMiles != null
+                ? `<div style="opacity:0.85; color:#111; margin-top:6px;">${
+                    payload.distanceMiles <= 0.1
+                      ? "On-site"
+                      : `${payload.distanceMiles.toFixed(1)} mi away`
+                  }${payload.distanceLabel ? ` from <span style="font-weight:700; color:#0b5cad;">${escapeHtml(payload.distanceLabel)}</span>` : ""}</div>`
+                : "";
+            info.setContent(
+              `<div style="font-family: ui-sans-serif, system-ui; font-size:12px; color:#111;"><div style="font-weight:700; font-size:13.5px; margin-bottom:4px;">${name}</div>${cuisinePhrase ? `<div style="opacity:0.9; color:#111; font-weight:500;">${escapeHtml(payload.cuisinePhrase)}</div>` : ""}${distanceLine}</div>`
+            );
+            info.open({ anchor: marker, map });
+          });
+          marker.addListener("mouseout", () => infoWindowRef.current?.close());
         } else {
           marker.setPosition({ lat: p.lat, lng: p.lng });
           marker.setMap(map);
         }
 
+        marker.set("info", p);
         next.set(p.restaurant_name, marker);
       }
 

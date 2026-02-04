@@ -1,13 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { PlaceSearch } from "@/components/PlaceSearch";
 import { GoogleMapPanel } from "@/components/GoogleMapPanel";
 import { RestaurantCard } from "@/components/RestaurantCard";
+import type { Requirements } from "@/lib/intakeTypes";
 
 const DEFAULT_CENTER = { lat: 37.4419, lng: -122.143 };
 const DEFAULT_AREA_LABEL = "Palo Alto, CA";
+const REQUIRED_FIELDS = ["areaLabel", "headcount", "budgetTotal", "dateNeeded", "timeNeeded"] as const;
+const MISSING_LABELS: Record<string, string> = {
+  areaLabel: "location",
+  headcount: "headcount",
+  budgetTotal: "budget",
+  dateNeeded: "date",
+  timeNeeded: "time",
+};
 
 type RestaurantResult = {
   restaurant_name: string;
@@ -76,10 +85,21 @@ type ApiResp = {
   error?: string;
 };
 
+type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+type ChatResponse = {
+  assistantMessage: string;
+  requirements: Requirements;
+  isComplete: boolean;
+  missing: string[];
+};
+
 export default function DiscoverPage() {
   const searchParams = useSearchParams();
   const isExplore = searchParams.get("mode") === "explore";
-  // Location (from Google Places)
   const [center, setCenter] = useState<{ lat: number; lng: number } | null>(
     isExplore ? DEFAULT_CENTER : null
   );
@@ -93,36 +113,99 @@ export default function DiscoverPage() {
 
   const [eventType, setEventType] = useState("");
   const [timeNeeded, setTimeNeeded] = useState("");
+  const [dateNeeded, setDateNeeded] = useState("");
 
   const [privacyLevel, setPrivacyLevel] = useState("");
   const [noiseLevel, setNoiseLevel] = useState("");
   const [vibe, setVibe] = useState("");
 
-  const [maxCakeFee, setMaxCakeFee] = useState("");
-  const [maxCorkageFee, setMaxCorkageFee] = useState("");
+  const [budgetType, setBudgetType] = useState<"total" | "per_head">("total");
 
   // API response state
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<ApiResp | null>(null);
   const [selected, setSelected] = useState<RestaurantResult | null>(null);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
-  const [heroIndex, setHeroIndex] = useState(0);
+  const [lightboxItems, setLightboxItems] = useState<string[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
   const [showDefaultHeader, setShowDefaultHeader] = useState(true);
+  const [roomIndexes, setRoomIndexes] = useState<Record<string, number>>({});
+  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  function setCardRef(name: string) {
+    return (el: HTMLDivElement | null) => {
+      if (!el) {
+        cardRefs.current.delete(name);
+        return;
+      }
+      cardRefs.current.set(name, el);
+    };
+  }
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
-        if (lightboxSrc) setLightboxSrc(null);
+        if (lightboxSrc) {
+          setLightboxSrc(null);
+          setLightboxItems([]);
+        }
         else setSelected(null);
+      }
+      if (lightboxSrc && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+        e.preventDefault();
+        const dir = e.key === "ArrowRight" ? 1 : -1;
+        setLightboxIndex((prev) =>
+          lightboxItems.length ? (prev + dir + lightboxItems.length) % lightboxItems.length : prev
+        );
       }
     }
     if (selected) window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selected, lightboxSrc]);
+  }, [selected, lightboxSrc, lightboxItems.length]);
 
   useEffect(() => {
-    setHeroIndex(0);
+    if (lightboxItems.length) {
+      setLightboxSrc(lightboxItems[lightboxIndex] ?? lightboxItems[0] ?? null);
+    }
+  }, [lightboxIndex, lightboxItems]);
+
+  function openLightbox(items: string[], index: number) {
+    if (!items.length) return;
+    setLightboxItems(items);
+    setLightboxIndex(index);
+    setLightboxSrc(items[index] ?? items[0]);
+  }
+
+  useEffect(() => {
+    if (!selected) {
+      setRoomIndexes({});
+      return;
+    }
+    const next: Record<string, number> = {};
+    for (const room of selected.rooms ?? []) {
+      if (room.room_name) next[room.room_name] = 0;
+    }
+    setRoomIndexes(next);
   }, [selected]);
+
+  useEffect(() => {
+    if (isExplore && !requirements.areaLabel) {
+      setRequirements((prev) => ({ ...prev, areaLabel: DEFAULT_AREA_LABEL }));
+    }
+  }, [isExplore, requirements.areaLabel]);
+
+  useEffect(() => {
+    const missingNext = REQUIRED_FIELDS.filter((field) => {
+      const value = requirements[field];
+      return !value || (typeof value === "string" && value.trim() === "");
+    }).map((field) => field.toString());
+    setMissing(missingNext);
+    setIsComplete(missingNext.length === 0);
+  }, [requirements]);
+
+  useEffect(() => {
+    transcriptEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, isSending]);
 
   function getPhotos(item: RestaurantResult) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -171,6 +254,16 @@ export default function DiscoverPage() {
       .map((p) => (p.startsWith("http") ? p : makePublicUrl(p)));
   }
 
+  function cycleRoom(roomName: string, dir: 1 | -1, total: number) {
+    if (!total) return;
+    setRoomIndexes((prev) => {
+      const next = { ...prev };
+      const current = prev[roomName] ?? 0;
+      next[roomName] = (current + dir + total) % total;
+      return next;
+    });
+  }
+
   function buildQuoteBody() {
     const lines: string[] = [];
     if (headcount) lines.push(`Capacity: ${headcount} guests`);
@@ -178,12 +271,13 @@ export default function DiscoverPage() {
     if (noiseLevel) lines.push(`Noise: ${noiseLevel}`);
     if (vibe) lines.push(`Vibe: ${vibe}`);
     if (needsAV) lines.push("A/V: needed");
-    if (budgetTotal) lines.push(`Budget: no more than $${budgetTotal}`);
+    if (budgetTotal)
+      lines.push(
+        `Budget: no more than $${budgetTotal} (${budgetType === "per_head" ? "per head" : "total"})`
+      );
     if (eventType) lines.push(`Event type: ${eventType}`);
     if (areaLabel) lines.push(`Area: ${areaLabel}`);
     if (radiusMiles) lines.push(`Radius: ${radiusMiles} miles`);
-    if (maxCakeFee) lines.push(`Max cake fee: $${maxCakeFee}`);
-    if (maxCorkageFee) lines.push(`Max corkage fee: $${maxCorkageFee}`);
     return lines.length ? lines.join("\n") : "No specific requirements provided.";
   }
 
@@ -193,17 +287,66 @@ export default function DiscoverPage() {
       return;
     }
 
-    const dateLabel = timeNeeded || "TBD";
+    const dateLabel = dateNeeded || "TBD";
     const subject = `Private Dining at ${item.restaurant_name} - ${dateLabel}`;
-    const body = `Hi ${item.restaurant_name} Team,\n\nI'm reaching out to inquire about booking a private dining room on ${dateLabel}. We’re planning an intimate dinner for a group of leaders from top tech companies and would love to host at your beautiful space.\n\nWe are looking for a private, enclosed space${
+    const body = `Hi ${item.restaurant_name} Team,\n\nI'm reaching out to inquire about booking a private dining room on ${dateLabel}.\n\nWe are looking for a private, enclosed space${
       headcount ? ` with capacity for ${headcount} guests` : ""
-    } at one long table (Chef’s Table style).\n\nTiming: ${timeNeeded || "TBD"}\nDetails:\n${buildQuoteBody()}\n\nPlease let me know if this date is available and if the space can accommodate our group. Thank you!\n`;
+    } at one long table (Chef’s Table style)${locationLine}.\n\nTiming: ${dateTimeLine}.\n\n${buildQuoteBody()}${
+      lastUserMessage ? `\n\nAlso, ${normalizeSentence(lastUserMessage)}` : ""
+    }\n\nPlease let me know if this date is available and if the space can accommodate our group. Thank you!\n`;
 
     const mailto = `mailto:${encodeURIComponent(
       item.contact_email
     )}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
     window.location.href = mailto;
+  }
+
+  async function sendMessage() {
+    if (isSending) return;
+    const text = draft.trim();
+    if (!text) return;
+
+    setIsSending(true);
+    setDraft("");
+
+    const userMessage: ChatMessage = { role: "user", content: text };
+    const nextMessages = [...messages, userMessage];
+    setMessages(nextMessages);
+
+    try {
+      const resp = await fetch("/api/intake/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: nextMessages, current: requirements }),
+      });
+
+      const json = (await resp.json()) as ChatResponse;
+      if (!resp.ok) {
+        throw new Error(json?.assistantMessage || json?.error || "Request failed");
+      }
+
+      setMessages([
+        ...nextMessages,
+        { role: "assistant", content: json.assistantMessage || "Thanks! Let me check that." },
+      ]);
+      if (json.requirements) {
+        setRequirements((prev) => ({ ...prev, ...json.requirements }));
+      }
+      if (Array.isArray(json.missing)) setMissing(json.missing);
+      if (typeof json.isComplete === "boolean") setIsComplete(json.isComplete);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Something went wrong.";
+      setMessages([
+        ...nextMessages,
+        {
+          role: "assistant",
+          content: `Sorry — I hit an issue (${message}). Please try again or rephrase.`,
+        },
+      ]);
+    } finally {
+      setIsSending(false);
+    }
   }
 
   const allResults = useMemo(
@@ -215,10 +358,15 @@ export default function DiscoverPage() {
     () =>
       allResults.map((r) => ({
         restaurant_name: r.restaurant_name,
+        cuisinePhrase: r.primary_vibe
+          ? r.primary_vibe
+          : null,
+        distanceMiles: r.distanceMiles ?? null,
+        distanceLabel: requirements.areaLabel ?? null,
         lat: r.lat,
         lng: r.lng,
       })),
-    [allResults]
+    [allResults, requirements.areaLabel]
   );
 
   const allSorted = useMemo(
@@ -246,18 +394,17 @@ export default function DiscoverPage() {
     if (radiusMiles) payload.radiusMiles = Number(radiusMiles);
     if (headcount) payload.headcount = Number(headcount);
     if (budgetTotal) payload.budgetTotal = Number(budgetTotal);
+    if (budgetTotal) payload.budgetType = budgetType;
 
-    if (eventType) payload.eventType = eventType;
-    if (timeNeeded) payload.timeNeeded = timeNeeded;
+    if (requirements.eventType) payload.eventType = requirements.eventType;
+    if (requirements.dateNeeded) payload.dateNeeded = requirements.dateNeeded;
+    if (requirements.timeNeeded) payload.timeNeeded = requirements.timeNeeded;
 
-    if (privacyLevel) payload.privacyLevel = privacyLevel;
-    if (noiseLevel) payload.noiseLevel = noiseLevel;
-    if (vibe) payload.vibe = vibe;
+    if (requirements.privacyLevel) payload.privacyLevel = requirements.privacyLevel;
+    if (requirements.noiseLevel) payload.noiseLevel = requirements.noiseLevel;
+    if (requirements.vibe) payload.vibe = requirements.vibe;
 
     if (needsAV) payload.needsAV = true;
-
-    if (maxCakeFee) payload.maxCakeFee = Number(maxCakeFee);
-    if (maxCorkageFee) payload.maxCorkageFee = Number(maxCorkageFee);
 
     const resp = await fetch("/api/recommendations", {
       method: "POST",
@@ -276,9 +423,10 @@ export default function DiscoverPage() {
   }, [isExplore]);
 
   return (
-    <div className="grid2">
-      {/* LEFT: Planner + Results */}
-      <div style={{ display: "grid", gap: 16 }}>
+    <div className="discoverPage">
+      <div className="grid2">
+        {/* LEFT: Planner */}
+        <div style={{ display: "grid", gap: 16 }}>
         <div className="card">
           <div className="cardInner">
             <div className="small" style={{ fontWeight: 900 }}>
@@ -296,37 +444,67 @@ export default function DiscoverPage() {
                 />
               </div>
 
-              <div>
-                <label className="label">Radius (miles)</label>
-                <input
-                  className="input"
-                  value={radiusMiles}
-                  onChange={(e) => setRadiusMiles(e.target.value)}
-                  placeholder="e.g., 5"
-                  inputMode="numeric"
-                />
+              <div
+                style={{
+                  marginTop: 12,
+                  display: "grid",
+                  gap: 10,
+                  maxHeight: 360,
+                  overflowY: "auto",
+                  padding: 12,
+                  borderRadius: 14,
+                  border: "1px solid var(--border)",
+                  background: "rgba(0,0,0,0.18)",
+                }}
+              >
+                {messages.map((msg, idx) => (
+                  <div
+                    key={`${msg.role}-${idx}`}
+                    style={{
+                      display: "flex",
+                      justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
+                    }}
+                  >
+                    <div
+                      style={{
+                        maxWidth: "85%",
+                        padding: "10px 12px",
+                        borderRadius: 14,
+                        border: "1px solid var(--border)",
+                        background:
+                          msg.role === "user"
+                            ? "rgba(201, 163, 106, 0.18)"
+                            : "rgba(255, 255, 255, 0.06)",
+                      }}
+                    >
+                      <div className="small" style={{ whiteSpace: "pre-wrap" }}>
+                        {msg.content}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div ref={transcriptEndRef} />
               </div>
 
-              <div>
-                <label className="label">Headcount</label>
-                <input
-                  className="input"
-                  value={headcount}
-                  onChange={(e) => setHeadcount(e.target.value)}
-                  placeholder="e.g., 20"
-                  inputMode="numeric"
-                />
-              </div>
-
-              <div>
-                <label className="label">Max budget ($)</label>
-                <input
+              <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+                <textarea
                   className="input"
                   value={budgetTotal}
                   onChange={(e) => setBudgetTotal(e.target.value)}
                   placeholder="e.g., 5000"
                   inputMode="numeric"
                 />
+              </div>
+              <div>
+                <label className="label">Budget type</label>
+                <select
+                  className="input"
+                  value={budgetType}
+                  onChange={(e) => setBudgetType(e.target.value as "total" | "per_head")}
+                >
+                  <option value="total">Total F&amp;B min spend</option>
+                  <option value="per_head">Per head</option>
+                </select>
               </div>
 
               <div>
@@ -339,6 +517,15 @@ export default function DiscoverPage() {
                 />
               </div>
 
+              <div>
+                <label className="label">Date</label>
+                <input
+                  className="input"
+                  type="date"
+                  value={dateNeeded}
+                  onChange={(e) => setDateNeeded(e.target.value)}
+                />
+              </div>
               <div>
                 <label className="label">Time needed</label>
                 <input
@@ -362,18 +549,10 @@ export default function DiscoverPage() {
                 </select>
               </div>
 
-              <div>
-                <label className="label">Noise</label>
-                <select
-                  className="input"
-                  value={noiseLevel}
-                  onChange={(e) => setNoiseLevel(e.target.value)}
-                >
-                  <option value="">Any noise</option>
-                  <option value="quiet">Quiet</option>
-                  <option value="moderate">Moderate</option>
-                  <option value="loud">Loud</option>
-                </select>
+          <div className="card">
+            <div className="cardInner">
+              <div className="small" style={{ fontWeight: 900 }}>
+                Use extracted details
               </div>
 
               <div>
@@ -383,28 +562,6 @@ export default function DiscoverPage() {
                   value={vibe}
                   onChange={(e) => setVibe(e.target.value)}
                   placeholder="e.g., upscale, modern, cozy"
-                />
-              </div>
-
-              <div>
-                <label className="label">Max cake fee ($)</label>
-                <input
-                  className="input"
-                  value={maxCakeFee}
-                  onChange={(e) => setMaxCakeFee(e.target.value)}
-                  placeholder="e.g., 25"
-                  inputMode="numeric"
-                />
-              </div>
-
-              <div>
-                <label className="label">Max corkage fee ($)</label>
-                <input
-                  className="input"
-                  value={maxCorkageFee}
-                  onChange={(e) => setMaxCorkageFee(e.target.value)}
-                  placeholder="e.g., 40"
-                  inputMode="numeric"
                 />
               </div>
 
@@ -422,26 +579,41 @@ export default function DiscoverPage() {
               </div>
             </div>
 
-            <div className="row" style={{ marginTop: 12 }}>
-              <button
-                className="btn btnPrimary"
-                onClick={() => getRecommendations()}
-                disabled={loading}
-              >
-                {loading ? "Searching..." : "Get recommendations"}
-              </button>
+                <div className="row" style={{ marginTop: 4 }}>
+                  <button
+                    className="btn btnPrimary"
+                    onClick={() => getRecommendations()}
+                    disabled={!isComplete || !center || loading}
+                  >
+                    {loading ? "Searching..." : "Get recommendations"}
+                  </button>
+                  <div className="small">
+                    {isComplete ? "Ready to recommend." : "Waiting on key details."}
+                  </div>
+                </div>
 
-              {data?.countRestaurants != null ? (
-                <div className="small">
-                  Found <b>{data.countRestaurants}</b> restaurants (from{" "}
-                  <b>{data.countRooms}</b> rooms)
-                </div>
-              ) : data?.count != null ? (
-                <div className="small">
-                  Scored <b>{data.count}</b> rooms
-                </div>
-              ) : null}
-            </div>
+                {!center ? (
+                  <div className="small" style={{ color: "var(--muted)" }}>
+                    Confirm a location from the dropdown to enable recommendations.
+                  </div>
+                ) : null}
+
+                {missing.length ? (
+                  <div className="small" style={{ color: "var(--muted)" }}>
+                    Missing: {missing.map((field) => MISSING_LABELS[field] ?? field).join(", ")}
+                  </div>
+                ) : null}
+
+                {data?.countRestaurants != null ? (
+                  <div className="small">
+                    Found <b>{data.countRestaurants}</b> restaurants (from{" "}
+                    <b>{data.countRooms}</b> rooms)
+                  </div>
+                ) : data?.count != null ? (
+                  <div className="small">
+                    Scored <b>{data.count}</b> rooms
+                  </div>
+                ) : null}
 
             {data?.error ? (
               <div className="small" style={{ marginTop: 10, color: "crimson" }}>
@@ -451,66 +623,10 @@ export default function DiscoverPage() {
           </div>
         </div>
 
-        {/* RESULTS */}
-        {showDefaultHeader ? (
-          allSorted.length ? (
-            <div style={{ display: "grid", gap: 10 }}>
-              <div className="small" style={{ fontWeight: 900 }}>
-                {DEFAULT_AREA_LABEL}
-              </div>
-              <div className="resultsGrid">
-                {allSorted.map((r) => (
-                  <RestaurantCard
-                    key={r.restaurant_name}
-                    item={r}
-                    onClick={() => setSelected(r)}
-                  />
-                ))}
-              </div>
-            </div>
-          ) : null
-        ) : (
-          <>
-            {data?.top3?.length ? (
-              <div style={{ display: "grid", gap: 10 }}>
-                <div className="small" style={{ fontWeight: 900 }}>
-                  Top 3 recommendations
-                </div>
-                <div className="resultsGrid">
-                  {data.top3.map((r, i) => (
-                    <RestaurantCard
-                      key={r.restaurant_name}
-                      item={r}
-                      badge={`Top ${i + 1}`}
-                      onClick={() => setSelected(r)}
-                    />
-                  ))}
-                </div>
-              </div>
-            ) : null}
+        </div>
 
-            {data?.others?.length ? (
-              <div style={{ display: "grid", gap: 10 }}>
-                <div className="small" style={{ fontWeight: 900 }}>
-                  Other restaurants
-                </div>
-                <div className="resultsGrid">
-                  {data.others.map((r) => (
-                    <RestaurantCard
-                      key={r.restaurant_name}
-                      item={r}
-                      onClick={() => setSelected(r)}
-                    />
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </>
-        )}
-      </div>
-
-      {/* RIGHT: Map */}
-      <div style={{ alignSelf: "start" }}>
+        {/* RIGHT: Map */}
+        <div style={{ alignSelf: "start", display: "grid", gap: 16 }}>
         {center ? (
           <GoogleMapPanel
             center={center}
@@ -528,6 +644,64 @@ export default function DiscoverPage() {
           </div>
         )}
       </div>
+      </div>
+
+      {/* RESULTS */}
+      {showDefaultHeader ? (
+        allSorted.length ? (
+          <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
+            <div className="sectionTitle">
+              {DEFAULT_AREA_LABEL}
+            </div>
+            <div className="resultsGrid">
+              {allSorted.map((r) => (
+                <RestaurantCard
+                  key={r.restaurant_name}
+                  item={r}
+                  onClick={() => setSelected(r)}
+                />
+              ))}
+            </div>
+          </div>
+        ) : null
+      ) : (
+        <>
+          {data?.top3?.length ? (
+            <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
+              <div className="sectionTitle sectionTitleDark">
+                Top 3 Recommendations
+              </div>
+              <div className="resultsGrid">
+                {data.top3.map((r, i) => (
+                  <RestaurantCard
+                    key={r.restaurant_name}
+                    item={r}
+                    badge={`Top ${i + 1}`}
+                    onClick={() => setSelected(r)}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {data?.others?.length ? (
+            <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
+              <div className="sectionTitle sectionTitleDark">
+                Other Restaurants
+              </div>
+              <div className="resultsGrid">
+                {data.others.map((r) => (
+                  <RestaurantCard
+                    key={r.restaurant_name}
+                    item={r}
+                    onClick={() => setSelected(r)}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </>
+      )}
 
       {selected ? (
         <div className="modalOverlay" onClick={() => setSelected(null)}>
@@ -543,60 +717,6 @@ export default function DiscoverPage() {
             </div>
 
             <div className="modalBody">
-              {getPhotos(selected)[0] ? (
-                <div className="modalHero">
-                  <img
-                    src={getPhotos(selected)[heroIndex] ?? getPhotos(selected)[0]}
-                    alt=""
-                    className="clickableImg"
-                    onClick={() =>
-                      setLightboxSrc(getPhotos(selected)[heroIndex] ?? getPhotos(selected)[0])
-                    }
-                  />
-                  {getPhotos(selected).length > 1 ? (
-                    <div className="heroControls">
-                      <button
-                        className="heroArrow"
-                        onClick={() =>
-                          setHeroIndex(
-                            (heroIndex - 1 + getPhotos(selected).length) %
-                              getPhotos(selected).length
-                          )
-                        }
-                        aria-label="Previous image"
-                      >
-                        ‹
-                      </button>
-                      <div className="heroCounter">
-                        {heroIndex + 1}/{getPhotos(selected).length}
-                      </div>
-                      <button
-                        className="heroArrow"
-                        onClick={() =>
-                          setHeroIndex((heroIndex + 1) % getPhotos(selected).length)
-                        }
-                        aria-label="Next image"
-                      >
-                        ›
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {getPhotos(selected).length > 1 ? (
-                <div className="heroDots">
-                  {getPhotos(selected).map((_, i) => (
-                    <button
-                      key={`dot-${i}`}
-                      className={`heroDot ${i === heroIndex ? "isActive" : ""}`}
-                      onClick={() => setHeroIndex(i)}
-                      aria-label={`Go to image ${i + 1}`}
-                    />
-                  ))}
-                </div>
-              ) : null}
-
               {getPhotos(selected).length > 1 ? (
                 <div className="gallery">
                   {getPhotos(selected).slice(1, 9).map((src, i) => (
@@ -605,7 +725,7 @@ export default function DiscoverPage() {
                       src={src}
                       alt=""
                       className="clickableImg"
-                      onClick={() => setLightboxSrc(src)}
+                      onClick={() => openLightbox(getPhotos(selected), i + 1)}
                     />
                   ))}
                 </div>
@@ -664,22 +784,48 @@ export default function DiscoverPage() {
                     <div className="otherRoomsList">
                       {otherRooms.map((room) => {
                         const photos = getRoomPhotos(room);
+                        const roomName = room.room_name ?? "";
+                        const activeIndex = roomName ? (roomIndexes[roomName] ?? 0) : 0;
+                        const activeSrc = photos[activeIndex] ?? photos[0];
                         return (
                           <div key={room.room_name} className="otherRoomItem">
                             <div className="small" style={{ fontWeight: 800 }}>
                               {room.room_name}
                             </div>
                             {photos.length ? (
-                              <div className="otherRoomsGallery">
-                                {photos.slice(0, 4).map((src, i) => (
-                                  <img
-                                    key={`${room.room_name}-${src}-${i}`}
-                                    src={src}
-                                    alt=""
-                                    className="clickableImg"
-                                    onClick={() => setLightboxSrc(src)}
-                                  />
-                                ))}
+                              <div className="roomCarousel">
+                                <button
+                                  className="roomArrow left"
+                                  onClick={() => cycleRoom(roomName, -1, photos.length)}
+                                  aria-label="Previous image"
+                                >
+                                  ‹
+                                </button>
+                                <div
+                                  className="roomSquare"
+                                  onClick={() =>
+                                    activeSrc && openLightbox(photos, activeIndex)
+                                  }
+                                  role="button"
+                                  tabIndex={0}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" && activeSrc)
+                                      openLightbox(photos, activeIndex);
+                                  }}
+                                >
+                                  {activeSrc ? (
+                                    <img src={activeSrc} alt="" />
+                                  ) : (
+                                    <div className="small">No images available.</div>
+                                  )}
+                                </div>
+                                <button
+                                  className="roomArrow right"
+                                  onClick={() => cycleRoom(roomName, 1, photos.length)}
+                                  aria-label="Next image"
+                                >
+                                  ›
+                                </button>
                               </div>
                             ) : (
                               <div className="small">No images available.</div>
@@ -703,9 +849,42 @@ export default function DiscoverPage() {
       ) : null}
 
       {lightboxSrc ? (
-        <div className="lightboxOverlay" onClick={() => setLightboxSrc(null)}>
+        <div
+          className="lightboxOverlay"
+          onClick={() => {
+            setLightboxSrc(null);
+            setLightboxItems([]);
+          }}
+        >
           <div className="lightbox" onClick={(e) => e.stopPropagation()}>
-            <img src={lightboxSrc} alt="" />
+            <img src={lightboxItems[lightboxIndex] ?? lightboxSrc} alt="" />
+            {lightboxItems.length > 1 ? (
+              <div className="lightboxControls">
+                <button
+                  className="lightboxArrow"
+                  onClick={() =>
+                    setLightboxIndex(
+                      (lightboxIndex - 1 + lightboxItems.length) % lightboxItems.length
+                    )
+                  }
+                  aria-label="Previous image"
+                >
+                  ‹
+                </button>
+                <div className="lightboxCounter">
+                  {lightboxIndex + 1}/{lightboxItems.length}
+                </div>
+                <button
+                  className="lightboxArrow"
+                  onClick={() =>
+                    setLightboxIndex((lightboxIndex + 1) % lightboxItems.length)
+                  }
+                  aria-label="Next image"
+                >
+                  ›
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}

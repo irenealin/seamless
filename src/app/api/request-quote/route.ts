@@ -12,6 +12,7 @@ const InputSchema = z.object({
     budgetTotal: z.string().optional(),
     needsAV: z.boolean().optional(),
     eventType: z.string().optional(),
+    dateNeeded: z.string().optional(),
     timeNeeded: z.string().optional(),
     privacyLevel: z.string().optional(),
     noiseLevel: z.string().optional(),
@@ -28,6 +29,7 @@ function formatRequirements(reqs: z.infer<typeof InputSchema>["requirements"]) {
   if (reqs.headcount) lines.push(`Headcount: ${reqs.headcount}`);
   if (reqs.budgetTotal) lines.push(`Max budget: $${reqs.budgetTotal}`);
   if (reqs.eventType) lines.push(`Event type: ${reqs.eventType}`);
+  if (reqs.dateNeeded) lines.push(`Date: ${reqs.dateNeeded}`);
   if (reqs.timeNeeded) lines.push(`Time needed: ${reqs.timeNeeded}`);
   if (reqs.privacyLevel) lines.push(`Privacy: ${reqs.privacyLevel}`);
   if (reqs.noiseLevel) lines.push(`Noise: ${reqs.noiseLevel}`);

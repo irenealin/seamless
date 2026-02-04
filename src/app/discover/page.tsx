@@ -101,10 +101,10 @@ type ChatResponse = {
 export default function DiscoverPage() {
   const searchParams = useSearchParams();
   const isExplore = searchParams.get("mode") === "explore";
-  // Location (from Google Places)
   const [center, setCenter] = useState<{ lat: number; lng: number } | null>(
     isExplore ? DEFAULT_CENTER : null
   );
+<<<<<<< HEAD
   const [requirements, setRequirements] = useState<Requirements>(() =>
     isExplore ? { areaLabel: DEFAULT_AREA_LABEL } : {}
   );
@@ -122,6 +122,25 @@ export default function DiscoverPage() {
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const galleryRef = useRef<HTMLDivElement | null>(null);
+=======
+  const [areaLabel, setAreaLabel] = useState(isExplore ? DEFAULT_AREA_LABEL : "");
+
+  // Filters (ALL start empty)
+  const [radiusMiles, setRadiusMiles] = useState("");
+  const [headcount, setHeadcount] = useState("");
+  const [budgetTotal, setBudgetTotal] = useState("");
+  const [needsAV, setNeedsAV] = useState(false);
+
+  const [eventType, setEventType] = useState("");
+  const [timeNeeded, setTimeNeeded] = useState("");
+  const [dateNeeded, setDateNeeded] = useState("");
+
+  const [privacyLevel, setPrivacyLevel] = useState("");
+  const [noiseLevel, setNoiseLevel] = useState("");
+  const [vibe, setVibe] = useState("");
+
+  const [budgetType, setBudgetType] = useState<"total" | "per_head">("total");
+>>>>>>> origin/irene
 
   // API response state
   const [loading, setLoading] = useState(false);
@@ -132,6 +151,20 @@ export default function DiscoverPage() {
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [showDefaultHeader, setShowDefaultHeader] = useState(true);
   const [roomIndexes, setRoomIndexes] = useState<Record<string, number>>({});
+<<<<<<< HEAD
+=======
+  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  function setCardRef(name: string) {
+    return (el: HTMLDivElement | null) => {
+      if (!el) {
+        cardRefs.current.delete(name);
+        return;
+      }
+      cardRefs.current.set(name, el);
+    };
+  }
+>>>>>>> origin/irene
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -139,9 +172,21 @@ export default function DiscoverPage() {
         if (lightboxSrc) {
           setLightboxSrc(null);
           setLightboxItems([]);
+<<<<<<< HEAD
         } else {
           setSelected(null);
         }
+      }
+      if (lightboxSrc && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+        e.preventDefault();
+        const dir = e.key === "ArrowRight" ? 1 : -1;
+        setLightboxIndex((prev) =>
+          lightboxItems.length ? (prev + dir + lightboxItems.length) % lightboxItems.length : prev
+        );
+=======
+        }
+        else setSelected(null);
+>>>>>>> origin/irene
       }
       if (lightboxSrc && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
         e.preventDefault();
@@ -156,6 +201,22 @@ export default function DiscoverPage() {
   }, [selected, lightboxSrc, lightboxItems.length]);
 
   useEffect(() => {
+<<<<<<< HEAD
+=======
+    if (lightboxItems.length) {
+      setLightboxSrc(lightboxItems[lightboxIndex] ?? lightboxItems[0] ?? null);
+    }
+  }, [lightboxIndex, lightboxItems]);
+
+  function openLightbox(items: string[], index: number) {
+    if (!items.length) return;
+    setLightboxItems(items);
+    setLightboxIndex(index);
+    setLightboxSrc(items[index] ?? items[0]);
+  }
+
+  useEffect(() => {
+>>>>>>> origin/irene
     if (!selected) {
       setRoomIndexes({});
       return;
@@ -168,10 +229,17 @@ export default function DiscoverPage() {
   }, [selected]);
 
   useEffect(() => {
+<<<<<<< HEAD
     if (lightboxItems.length) {
       setLightboxSrc(lightboxItems[lightboxIndex] ?? lightboxItems[0] ?? null);
     }
   }, [lightboxIndex, lightboxItems]);
+=======
+    if (isExplore && !requirements.areaLabel) {
+      setRequirements((prev) => ({ ...prev, areaLabel: DEFAULT_AREA_LABEL }));
+    }
+  }, [isExplore, requirements.areaLabel]);
+>>>>>>> origin/irene
 
   useEffect(() => {
     const missingNext = REQUIRED_FIELDS.filter((field) => {
@@ -186,6 +254,7 @@ export default function DiscoverPage() {
     transcriptEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, isSending]);
 
+<<<<<<< HEAD
   function setCardRef(name: string) {
     return (el: HTMLDivElement | null) => {
       if (!el) {
@@ -196,6 +265,8 @@ export default function DiscoverPage() {
     };
   }
 
+=======
+>>>>>>> origin/irene
   function getPhotos(item: RestaurantResult) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const bucket = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET;
@@ -243,6 +314,7 @@ export default function DiscoverPage() {
       .map((p) => (p.startsWith("http") ? p : makePublicUrl(p)));
   }
 
+<<<<<<< HEAD
   function openLightbox(items: string[], index: number) {
     if (!items.length) return;
     setLightboxItems(items);
@@ -250,6 +322,8 @@ export default function DiscoverPage() {
     setLightboxSrc(items[index] ?? items[0]);
   }
 
+=======
+>>>>>>> origin/irene
   function cycleRoom(roomName: string, dir: 1 | -1, total: number) {
     if (!total) return;
     setRoomIndexes((prev) => {
@@ -260,6 +334,7 @@ export default function DiscoverPage() {
     });
   }
 
+<<<<<<< HEAD
   function scrollGallery(dir: 1 | -1) {
     if (!galleryRef.current) return;
     galleryRef.current.scrollBy({ left: dir * 260, behavior: "smooth" });
@@ -296,6 +371,23 @@ export default function DiscoverPage() {
 
     const sentence = parts.join(", ") + (parts.length ? "." : "");
     return sentence || "We don’t have any specific requirements yet.";
+=======
+  function buildQuoteBody() {
+    const lines: string[] = [];
+    if (headcount) lines.push(`Capacity: ${headcount} guests`);
+    if (privacyLevel) lines.push(`Privacy: ${privacyLevel}`);
+    if (noiseLevel) lines.push(`Noise: ${noiseLevel}`);
+    if (vibe) lines.push(`Vibe: ${vibe}`);
+    if (needsAV) lines.push("A/V: needed");
+    if (budgetTotal)
+      lines.push(
+        `Budget: no more than $${budgetTotal} (${budgetType === "per_head" ? "per head" : "total"})`
+      );
+    if (eventType) lines.push(`Event type: ${eventType}`);
+    if (areaLabel) lines.push(`Area: ${areaLabel}`);
+    if (radiusMiles) lines.push(`Radius: ${radiusMiles} miles`);
+    return lines.length ? lines.join("\n") : "No specific requirements provided.";
+>>>>>>> origin/irene
   }
 
   function requestQuoteDraft(item: RestaurantResult) {
@@ -304,6 +396,7 @@ export default function DiscoverPage() {
       return;
     }
 
+<<<<<<< HEAD
     const lastUserMessage =
       [...messages].reverse().find((m) => m.role === "user")?.content?.trim() ?? "";
     const normalizeSentence = (value: string) => {
@@ -325,6 +418,9 @@ export default function DiscoverPage() {
     const locationLine = areaLabel
       ? ` in ${areaLabel}${radiusMiles ? ` (within ${radiusMiles} miles)` : ""}`
       : "";
+=======
+    const dateLabel = dateNeeded || "TBD";
+>>>>>>> origin/irene
     const subject = `Private Dining at ${item.restaurant_name} - ${dateLabel}`;
     const body = `Hi ${item.restaurant_name} Team,\n\nI'm reaching out to inquire about booking a private dining room on ${dateLabel}.\n\nWe are looking for a private, enclosed space${
       headcount ? ` with capacity for ${headcount} guests` : ""
@@ -358,6 +454,7 @@ export default function DiscoverPage() {
         body: JSON.stringify({ messages: nextMessages, current: requirements }),
       });
 
+<<<<<<< HEAD
       const rawText = await resp.text();
       const contentType = resp.headers.get("content-type") ?? "";
       let json: ChatResponse | null = null;
@@ -390,6 +487,11 @@ export default function DiscoverPage() {
       }
       if (!resp.ok) {
         throw new Error(json?.assistantMessage || (json as any)?.error || "Request failed");
+=======
+      const json = (await resp.json()) as ChatResponse;
+      if (!resp.ok) {
+        throw new Error(json?.assistantMessage || json?.error || "Request failed");
+>>>>>>> origin/irene
       }
 
       setMessages([
@@ -424,7 +526,13 @@ export default function DiscoverPage() {
     () =>
       allResults.map((r) => ({
         restaurant_name: r.restaurant_name,
+<<<<<<< HEAD
         cuisinePhrase: r.cuisine ?? null,
+=======
+        cuisinePhrase: r.primary_vibe
+          ? r.primary_vibe
+          : null,
+>>>>>>> origin/irene
         distanceMiles: r.distanceMiles ?? null,
         distanceLabel: requirements.areaLabel ?? null,
         lat: r.lat,
@@ -459,6 +567,7 @@ export default function DiscoverPage() {
       areaLabel: requirements.areaLabel ?? undefined,
     };
 
+<<<<<<< HEAD
     const parseNumber = (value?: string) => {
       if (!value) return undefined;
       const cleaned = value.replace(/[^0-9.]/g, "");
@@ -473,11 +582,26 @@ export default function DiscoverPage() {
     if (radiusMiles != null) payload.radiusMiles = radiusMiles;
     if (headcount != null) payload.headcount = headcount;
     if (budgetTotal != null) payload.budgetTotal = budgetTotal;
+=======
+    if (radiusMiles) payload.radiusMiles = Number(radiusMiles);
+    if (headcount) payload.headcount = Number(headcount);
+    if (budgetTotal) payload.budgetTotal = Number(budgetTotal);
+    if (budgetTotal) payload.budgetType = budgetType;
 
     if (requirements.eventType) payload.eventType = requirements.eventType;
     if (requirements.dateNeeded) payload.dateNeeded = requirements.dateNeeded;
     if (requirements.timeNeeded) payload.timeNeeded = requirements.timeNeeded;
 
+    if (requirements.privacyLevel) payload.privacyLevel = requirements.privacyLevel;
+    if (requirements.noiseLevel) payload.noiseLevel = requirements.noiseLevel;
+    if (requirements.vibe) payload.vibe = requirements.vibe;
+>>>>>>> origin/irene
+
+    if (requirements.eventType) payload.eventType = requirements.eventType;
+    if (requirements.dateNeeded) payload.dateNeeded = requirements.dateNeeded;
+    if (requirements.timeNeeded) payload.timeNeeded = requirements.timeNeeded;
+
+<<<<<<< HEAD
     if (requirements.privacyLevel) payload.privacyLevel = requirements.privacyLevel;
     if (requirements.noiseLevel) payload.noiseLevel = requirements.noiseLevel;
     if (requirements.vibe) payload.vibe = requirements.vibe;
@@ -487,6 +611,8 @@ export default function DiscoverPage() {
     if (requirements.maxCakeFee) payload.maxCakeFee = Number(requirements.maxCakeFee);
     if (requirements.maxCorkageFee) payload.maxCorkageFee = Number(requirements.maxCorkageFee);
 
+=======
+>>>>>>> origin/irene
     const resp = await fetch("/api/recommendations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -506,6 +632,7 @@ export default function DiscoverPage() {
   return (
     <div className="discoverPage">
       <div className="grid2">
+<<<<<<< HEAD
         {/* LEFT: AI Intake Chat */}
         <div style={{ display: "grid", gap: 16 }}>
           <div className="card">
@@ -514,6 +641,15 @@ export default function DiscoverPage() {
                 Describe your event — the AI concierge will extract details and ask one follow-up
                 only if needed.
               </div>
+=======
+        {/* LEFT: Planner */}
+        <div style={{ display: "grid", gap: 16 }}>
+        <div className="card">
+          <div className="cardInner">
+            <div className="small" style={{ fontWeight: 900 }}>
+              Tell us what you need — we’ll match you with the best private dining venues.
+            </div>
+>>>>>>> origin/irene
 
               <div
                 style={{
@@ -571,6 +707,7 @@ export default function DiscoverPage() {
                     }
                   }}
                 />
+<<<<<<< HEAD
                 <div className="row">
                   <button
                     className="btn btnPrimary"
@@ -581,14 +718,192 @@ export default function DiscoverPage() {
                   </button>
                   <div className="small">Shift+Enter for a new line.</div>
                 </div>
+=======
               </div>
-            </div>
-          </div>
+
+              <div
+                style={{
+                  marginTop: 12,
+                  display: "grid",
+                  gap: 10,
+                  maxHeight: 360,
+                  overflowY: "auto",
+                  padding: 12,
+                  borderRadius: 14,
+                  border: "1px solid var(--border)",
+                  background: "rgba(0,0,0,0.18)",
+                }}
+              >
+                {messages.map((msg, idx) => (
+                  <div
+                    key={`${msg.role}-${idx}`}
+                    style={{
+                      display: "flex",
+                      justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
+                    }}
+                  >
+                    <div
+                      style={{
+                        maxWidth: "85%",
+                        padding: "10px 12px",
+                        borderRadius: 14,
+                        border: "1px solid var(--border)",
+                        background:
+                          msg.role === "user"
+                            ? "rgba(201, 163, 106, 0.18)"
+                            : "rgba(255, 255, 255, 0.06)",
+                      }}
+                    >
+                      <div className="small" style={{ whiteSpace: "pre-wrap" }}>
+                        {msg.content}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div ref={transcriptEndRef} />
+              </div>
+
+              <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+                <textarea
+                  className="input"
+                  value={budgetTotal}
+                  onChange={(e) => setBudgetTotal(e.target.value)}
+                  placeholder="e.g., 5000"
+                  inputMode="numeric"
+                />
+              </div>
+              <div>
+                <label className="label">Budget type</label>
+                <select
+                  className="input"
+                  value={budgetType}
+                  onChange={(e) => setBudgetType(e.target.value as "total" | "per_head")}
+                >
+                  <option value="total">Total F&amp;B min spend</option>
+                  <option value="per_head">Per head</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="label">Event type</label>
+                <input
+                  className="input"
+                  value={eventType}
+                  onChange={(e) => setEventType(e.target.value)}
+                  placeholder="e.g., team dinner, client dinner, board meeting"
+                />
+              </div>
+
+              <div>
+                <label className="label">Date</label>
+                <input
+                  className="input"
+                  type="date"
+                  value={dateNeeded}
+                  onChange={(e) => setDateNeeded(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="label">Time needed</label>
+                <input
+                  className="input"
+                  value={timeNeeded}
+                  onChange={(e) => setTimeNeeded(e.target.value)}
+                  placeholder="e.g., 6pm–9pm"
+                />
+              </div>
+
+              <div>
+                <label className="label">Privacy</label>
+                <select
+                  className="input"
+                  value={privacyLevel}
+                  onChange={(e) => setPrivacyLevel(e.target.value)}
+                >
+                  <option value="">Any privacy</option>
+                  <option value="full">Full private</option>
+                  <option value="partial">Semi-private</option>
+                </select>
+              </div>
 
           <div className="card">
             <div className="cardInner">
               <div className="small" style={{ fontWeight: 900 }}>
                 Use extracted details
+              </div>
+
+              <div>
+                <label className="label">Vibe keyword</label>
+                <input
+                  className="input"
+                  value={vibe}
+                  onChange={(e) => setVibe(e.target.value)}
+                  placeholder="e.g., upscale, modern, cozy"
+                />
+              </div>
+
+              <div className="span3">
+                <label style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={needsAV}
+                    onChange={(e) => setNeedsAV(e.target.checked)}
+                  />
+                  <span className="small" style={{ fontWeight: 800 }}>
+                    Needs A/V
+                  </span>
+                </label>
+>>>>>>> origin/irene
+              </div>
+            </div>
+          </div>
+
+<<<<<<< HEAD
+          <div className="card">
+            <div className="cardInner">
+              <div className="small" style={{ fontWeight: 900 }}>
+                Use extracted details
+=======
+                <div className="row" style={{ marginTop: 4 }}>
+                  <button
+                    className="btn btnPrimary"
+                    onClick={() => getRecommendations()}
+                    disabled={!isComplete || !center || loading}
+                  >
+                    {loading ? "Searching..." : "Get recommendations"}
+                  </button>
+                  <div className="small">
+                    {isComplete ? "Ready to recommend." : "Waiting on key details."}
+                  </div>
+                </div>
+
+                {!center ? (
+                  <div className="small" style={{ color: "var(--muted)" }}>
+                    Confirm a location from the dropdown to enable recommendations.
+                  </div>
+                ) : null}
+
+                {missing.length ? (
+                  <div className="small" style={{ color: "var(--muted)" }}>
+                    Missing: {missing.map((field) => MISSING_LABELS[field] ?? field).join(", ")}
+                  </div>
+                ) : null}
+
+                {data?.countRestaurants != null ? (
+                  <div className="small">
+                    Found <b>{data.countRestaurants}</b> restaurants (from{" "}
+                    <b>{data.countRooms}</b> rooms)
+                  </div>
+                ) : data?.count != null ? (
+                  <div className="small">
+                    Scored <b>{data.count}</b> rooms
+                  </div>
+                ) : null}
+
+            {data?.error ? (
+              <div className="small" style={{ marginTop: 10, color: "crimson" }}>
+                Error: {data.error}
+>>>>>>> origin/irene
               </div>
 
               <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
@@ -685,6 +1000,7 @@ export default function DiscoverPage() {
           </div>
         </div>
 
+<<<<<<< HEAD
         {/* RIGHT: Map */}
         <div className="mapColumn">
           {center ? (
@@ -762,6 +1078,84 @@ export default function DiscoverPage() {
                 ))}
               </div>
             </div>
+=======
+        </div>
+
+        {/* RIGHT: Map */}
+        <div style={{ alignSelf: "start", display: "grid", gap: 16 }}>
+        {center ? (
+          <GoogleMapPanel
+            center={center}
+            points={points}
+            onSelect={(name) => {
+              // optional: scroll to card / highlight later
+              console.log("Selected on map:", name);
+            }}
+          />
+        ) : (
+          <div className="card">
+            <div className="cardInner">
+              <div className="small">Select an area to show the map and get recommendations.</div>
+            </div>
+          </div>
+        )}
+      </div>
+      </div>
+
+      {/* RESULTS */}
+      {showDefaultHeader ? (
+        allSorted.length ? (
+          <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
+            <div className="sectionTitle">
+              {DEFAULT_AREA_LABEL}
+            </div>
+            <div className="resultsGrid">
+              {allSorted.map((r) => (
+                <RestaurantCard
+                  key={r.restaurant_name}
+                  item={r}
+                  onClick={() => setSelected(r)}
+                />
+              ))}
+            </div>
+          </div>
+        ) : null
+      ) : (
+        <>
+          {data?.top3?.length ? (
+            <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
+              <div className="sectionTitle sectionTitleDark">
+                Top 3 Recommendations
+              </div>
+              <div className="resultsGrid">
+                {data.top3.map((r, i) => (
+                  <RestaurantCard
+                    key={r.restaurant_name}
+                    item={r}
+                    badge={`Top ${i + 1}`}
+                    onClick={() => setSelected(r)}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {data?.others?.length ? (
+            <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
+              <div className="sectionTitle sectionTitleDark">
+                Other Restaurants
+              </div>
+              <div className="resultsGrid">
+                {data.others.map((r) => (
+                  <RestaurantCard
+                    key={r.restaurant_name}
+                    item={r}
+                    onClick={() => setSelected(r)}
+                  />
+                ))}
+              </div>
+            </div>
+>>>>>>> origin/irene
           ) : null}
         </>
       )}
@@ -780,6 +1174,7 @@ export default function DiscoverPage() {
             </div>
 
             <div className="modalBody">
+<<<<<<< HEAD
               {getPhotos(selected).length ? (
                 <div className="modalGalleryWrap">
                   <button
@@ -807,6 +1202,19 @@ export default function DiscoverPage() {
                   >
                     ›
                   </button>
+=======
+              {getPhotos(selected).length > 1 ? (
+                <div className="gallery">
+                  {getPhotos(selected).slice(1, 9).map((src, i) => (
+                    <img
+                      key={`${src}-${i}`}
+                      src={src}
+                      alt=""
+                      className="clickableImg"
+                      onClick={() => openLightbox(getPhotos(selected), i + 1)}
+                    />
+                  ))}
+>>>>>>> origin/irene
                 </div>
               ) : null}
 

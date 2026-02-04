@@ -79,6 +79,7 @@ export function GoogleMapPanel({
             if (!info) return;
             const payload = (marker.get("info") as Point | undefined) ?? p;
             const name = escapeHtml(payload.restaurant_name);
+<<<<<<< HEAD
             const cuisine = payload.cuisinePhrase
               ? `<div style="opacity:0.85; font-size:12px; margin-top:2px;">${escapeHtml(payload.cuisinePhrase)}</div>`
               : "";
@@ -96,6 +97,21 @@ export function GoogleMapPanel({
                 ${cuisine}
                 ${distanceLine}
               </div>`
+=======
+            const cuisinePhrase = payload.cuisinePhrase
+              ? `<div style="opacity:0.9; color:#111; font-weight:500;">${escapeHtml(payload.cuisinePhrase)}</div>`
+              : "";
+            const distanceLine =
+              payload.distanceMiles != null
+                ? `<div style="opacity:0.85; color:#111; margin-top:6px;">${
+                    payload.distanceMiles <= 0.1
+                      ? "On-site"
+                      : `${payload.distanceMiles.toFixed(1)} mi away`
+                  }${payload.distanceLabel ? ` from <span style="font-weight:700; color:#0b5cad;">${escapeHtml(payload.distanceLabel)}</span>` : ""}</div>`
+                : "";
+            info.setContent(
+              `<div style="font-family: ui-sans-serif, system-ui; font-size:12px; color:#111;"><div style="font-weight:700; font-size:13.5px; margin-bottom:4px;">${name}</div>${cuisinePhrase ? `<div style="opacity:0.9; color:#111; font-weight:500;">${escapeHtml(payload.cuisinePhrase)}</div>` : ""}${distanceLine}</div>`
+>>>>>>> origin/irene
             );
             info.open({ anchor: marker, map });
           });

@@ -81,11 +81,7 @@ export function scoreRow(row: RestaurantRoomRow, input: SearchInput) {
         reasons.push(`${d.toFixed(1)} miles away (outside radius)`);
       }
     } else {
-<<<<<<< HEAD
-      // No radius: keep proximity as a mild positive signal.
-=======
       // No radius provided; treat all city matches as in-radius and only reward proximity.
->>>>>>> origin/irene
       withinRadius = true;
       score += Math.max(0, 10 - d);
       reasons.push(`${d.toFixed(1)} miles away`);

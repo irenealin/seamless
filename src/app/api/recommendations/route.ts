@@ -95,18 +95,11 @@ export async function POST(req: Request) {
         lng: best.row.lng ?? null,
         restaurant_des: best.row.restaurant_des ?? null,
         primary_vibe: best.row.primary_vibe ?? null,
-<<<<<<< HEAD
         cuisine: (best.row as any).cuisine ?? null,
         contact_email: best.row.contact_email ?? null,
         image_paths: best.row.image_paths ?? null,
         score: best.score,
         reasons: normalizeReasons(best.reasons),
-=======
-        contact_email: best.row.contact_email ?? null,
-        image_paths: best.row.image_paths ?? null,
-        score: best.score,
-        reasons: best.reasons,
->>>>>>> origin/irene
         distanceMiles: best.distanceMilesAway ?? null,
         bestRoom: {
           room_name: best.row.room_name,
@@ -139,13 +132,8 @@ export async function POST(req: Request) {
   const normalize = (value: string) =>
     value
       .toLowerCase()
-<<<<<<< HEAD
-      .replace(/[^a-z0-9\\s]/g, " ")
-      .replace(/\\s+/g, " ")
-=======
       .replace(/[^a-z0-9\s]/g, " ")
       .replace(/\s+/g, " ")
->>>>>>> origin/irene
       .trim();
   const cityToken = cityTokenRaw ? normalize(cityTokenRaw) : "";
   const cityInitials = cityToken
@@ -163,11 +151,7 @@ export async function POST(req: Request) {
     return false;
   };
 
-<<<<<<< HEAD
   const eligibleForTop3 = restaurants.filter((r) => {
-=======
-  let eligibleForTop3 = restaurants.filter((r) => {
->>>>>>> origin/irene
     if (parsed.data.radiusMiles != null) {
       return r.distanceMiles != null && r.distanceMiles <= parsed.data.radiusMiles;
     }
@@ -176,7 +160,6 @@ export async function POST(req: Request) {
     }
     return true;
   });
-<<<<<<< HEAD
   const eligibleNames = new Set(eligibleForTop3.map((r) => r.restaurant_name));
   const fallbackTop3 =
     !eligibleForTop3.length && restaurants.length ? restaurants.slice(0, 3) : [];
@@ -187,18 +170,6 @@ export async function POST(req: Request) {
       .filter((r) => !eligibleNames.has(r.restaurant_name))
       .filter((r) => !fallbackTop3.some((f) => f.restaurant_name === r.restaurant_name))
       .slice(0, 12),
-=======
-  if (!eligibleForTop3.length && cityToken) {
-    eligibleForTop3 = restaurants.filter(
-      (r) => r.distanceMiles != null && r.distanceMiles <= 15
-    );
-  }
-  const eligibleNames = new Set(eligibleForTop3.map((r) => r.restaurant_name));
-
-  return NextResponse.json({
-    top3: eligibleForTop3.slice(0, 3),
-    others: restaurants.filter((r) => !eligibleNames.has(r.restaurant_name)).slice(0, 12),
->>>>>>> origin/irene
     countRestaurants: restaurants.length,
     countRooms: rows.length,
   });

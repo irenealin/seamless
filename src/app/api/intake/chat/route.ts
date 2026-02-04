@@ -107,10 +107,6 @@ export async function POST(req: Request) {
     const message = err instanceof Error ? err.message : "OpenAI request failed";
     return NextResponse.json({ error: message }, { status: 500 });
   }
-<<<<<<< HEAD
-
-=======
->>>>>>> origin/irene
   const parsedJson = safeJsonParse(content);
   const parsedResponse = ResponseSchema.safeParse(parsedJson ?? {});
 

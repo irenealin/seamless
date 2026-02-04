@@ -225,13 +225,8 @@ a{ color: inherit; text-decoration: none; }
   margin-top: 6px;
 }
 .roomSquare{
-<<<<<<< HEAD
   width: 160px;
   height: 160px;
-=======
-  width: 210px;
-  height: 210px;
->>>>>>> origin/irene
   border-radius: 10px;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -246,13 +241,8 @@ a{ color: inherit; text-decoration: none; }
   object-fit: cover;
 }
 .roomArrow{
-<<<<<<< HEAD
   width: 26px;
   height: 26px;
-=======
-  width: 28px;
-  height: 28px;
->>>>>>> origin/irene
   border-radius: 999px;
   border: 1px solid var(--border);
   background: rgba(255,255,255,0.06);

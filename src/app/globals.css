@@ -54,6 +54,10 @@ body:has(.discoverPage){
 body:has(.discoverPage) .header .btn{
   color: var(--text);
 }
+body:has(.discoverPage) .container{
+  max-width: 1480px;
+  padding: 16px 10px;
+}
 
 .discoverPage{
   min-height: 100vh;
@@ -153,6 +157,16 @@ a{ color: inherit; text-decoration: none; }
 }
 .btnPrimary:hover{ background: #d1b079; }
 
+.btnGhost{
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.btnGhost:hover{ background: rgba(255,255,255,0.12); }
+
 .card{
   border-radius: var(--radius2);
   border: 1px solid var(--border);
@@ -171,6 +185,17 @@ a{ color: inherit; text-decoration: none; }
 @media (min-width: 900px){
   .grid2{ grid-template-columns: 1.2fr 0.8fr; align-items:center; }
 }
+.discoverGrid{
+  display:grid;
+  gap: 24px;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 1100px){
+  .discoverGrid{
+    grid-template-columns: 3fr 7fr 0.25fr;
+    align-items:start;
+  }
+}
 .mapColumn{
   align-self: start;
   display: grid;
@@ -181,6 +206,39 @@ a{ color: inherit; text-decoration: none; }
     position: sticky;
     top: 16px;
   }
+}
+.stickyColumn{
+  align-self: start;
+}
+@media (min-width: 1100px){
+  .stickyColumn{
+    position: sticky;
+    top: 16px;
+  }
+}
+
+@media (min-width: 1100px){
+  .conciergePanel{
+    max-height: calc(100vh - 140px);
+    overflow-y: auto;
+    padding-right: 6px;
+  }
+}
+
+.snapshotRow.isUpdated{
+  box-shadow: 0 0 0 2px rgba(201, 163, 106, 0.4);
+  transition: box-shadow 0.3s ease;
+}
+
+.conciergePanel .cardInner{
+  padding: 14px;
+}
+.conciergePanel .small{
+  font-size: 12px;
+}
+.conciergePanel .input{
+  padding: 10px 10px;
+  border-radius: 12px;
 }
 
 .h1{

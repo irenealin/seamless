@@ -15,6 +15,7 @@ export type RestaurantRoomRow = {
   noise_level: string | null;
   primary_vibe: string | null;
   vibe_tags: string | null;
+  cuisine: string | null;
   a_v: string | null;
   min_spend_estimate: number | null;
   menu_link: string | null;
@@ -62,16 +63,28 @@ function distanceMiles(aLat: number, aLng: number, bLat: number, bLng: number) {
 export function scoreRow(row: RestaurantRoomRow, input: SearchInput) {
   let score = 0;
   const reasons: string[] = [];
+  let distanceMilesAway: number | null = null;
+  let withinRadius: boolean | null = null;
 
   // distance
   if (input.lat != null && input.lng != null && row.lat != null && row.lng != null) {
     const d = distanceMiles(input.lat, input.lng, row.lat, row.lng);
-    const radius = input.radiusMiles ?? 5;
-    if (d <= radius) {
-      score += Math.max(0, 20 - d * 3);
-      reasons.push(`${d.toFixed(1)} miles away`);
+    distanceMilesAway = d;
+    if (input.radiusMiles != null) {
+      const radius = input.radiusMiles;
+      withinRadius = d <= radius;
+      if (withinRadius) {
+        score += Math.max(0, 20 - d * 3);
+        reasons.push(`${d.toFixed(1)} miles away`);
+      } else {
+        score -= 50;
+        reasons.push(`${d.toFixed(1)} miles away (outside radius)`);
+      }
     } else {
-      score -= 50;
+      // No radius provided; treat all city matches as in-radius and only reward proximity.
+      withinRadius = true;
+      score += Math.max(0, 10 - d);
+      reasons.push(`${d.toFixed(1)} miles away`);
     }
   }
 
@@ -126,5 +139,5 @@ export function scoreRow(row: RestaurantRoomRow, input: SearchInput) {
     reasons.push(`Min spend ~$${row.min_spend_estimate}`);
   }
 
-  return { score, reasons };
+  return { score, reasons, distanceMilesAway, withinRadius };
 }

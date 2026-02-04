@@ -7,6 +7,7 @@ const InputSchema = z.object({
   lat: z.number().optional(),
   lng: z.number().optional(),
   radiusMiles: z.number().optional(),
+  areaLabel: z.string().optional(),
   headcount: z.number().optional(),
   privacyLevel: z.string().optional(),
   noiseLevel: z.string().optional(),
@@ -29,10 +30,34 @@ export async function POST(req: Request) {
 
   const ranked = rows
     .map((row) => {
-      const { score, reasons } = scoreRow(row, parsed.data);
-      return { row, score, reasons };
+      const { score, reasons, distanceMilesAway, withinRadius } = scoreRow(row, parsed.data);
+      return { row, score, reasons, distanceMilesAway, withinRadius };
     })
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => {
+      const hasLocation = parsed.data.lat != null && parsed.data.lng != null;
+      if (hasLocation) {
+        const hasDistanceA = a.distanceMilesAway != null;
+        const hasDistanceB = b.distanceMilesAway != null;
+        const radius = parsed.data.radiusMiles;
+
+        const bucket = (hasDistance: boolean, within: boolean | null) => {
+          if (!hasDistance) return 2;
+          if (radius != null) return within ? 0 : 1;
+          return 0;
+        };
+
+        const bucketA = bucket(hasDistanceA, a.withinRadius);
+        const bucketB = bucket(hasDistanceB, b.withinRadius);
+        if (bucketA !== bucketB) return bucketA - bucketB;
+
+        if (hasDistanceA && hasDistanceB) {
+          const d = (a.distanceMilesAway ?? 0) - (b.distanceMilesAway ?? 0);
+          if (d !== 0) return d;
+        }
+      }
+
+      return b.score - a.score;
+    });
 
   // ✅ ADD THIS BLOCK RIGHT HERE
   const byRestaurant = new Map<
@@ -53,6 +78,10 @@ export async function POST(req: Request) {
     }
   }
 
+  const hasRadius = parsed.data.radiusMiles != null;
+  const normalizeReasons = (reasons: string[]) =>
+    hasRadius ? reasons : reasons.map((r) => r.replace(" (outside radius)", ""));
+
   const restaurants = Array.from(byRestaurant.entries())
     .map(([restaurant_name, g]) => {
       const best = g.best;
@@ -64,10 +93,14 @@ export async function POST(req: Request) {
         address: best.row.address ?? null,
         lat: best.row.lat ?? null,
         lng: best.row.lng ?? null,
+        restaurant_des: best.row.restaurant_des ?? null,
+        primary_vibe: best.row.primary_vibe ?? null,
+        cuisine: (best.row as any).cuisine ?? null,
         contact_email: best.row.contact_email ?? null,
         image_paths: best.row.image_paths ?? null,
         score: best.score,
-        reasons: best.reasons,
+        reasons: normalizeReasons(best.reasons),
+        distanceMiles: best.distanceMilesAway ?? null,
         bestRoom: {
           room_name: best.row.room_name,
           room_desc: best.row.room_desc ?? null,
@@ -95,9 +128,48 @@ export async function POST(req: Request) {
     })
     .sort((a, b) => b.score - a.score);
 
+  const cityTokenRaw = (parsed.data.areaLabel ?? "").split(",")[0]?.trim().toLowerCase();
+  const normalize = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  const cityToken = cityTokenRaw ? normalize(cityTokenRaw) : "";
+  const cityInitials = cityToken
+    ? cityToken
+        .split(" ")
+        .filter(Boolean)
+        .map((w) => w[0])
+        .join("")
+    : "";
+  const matchesCity = (address: string | null | undefined) => {
+    if (!address || !cityToken) return false;
+    const norm = normalize(address);
+    if (norm.includes(cityToken)) return true;
+    if (cityInitials && norm.split(" ").includes(cityInitials)) return true;
+    return false;
+  };
+
+  const eligibleForTop3 = restaurants.filter((r) => {
+    if (parsed.data.radiusMiles != null) {
+      return r.distanceMiles != null && r.distanceMiles <= parsed.data.radiusMiles;
+    }
+    if (cityToken) {
+      return matchesCity(r.address);
+    }
+    return true;
+  });
+  const eligibleNames = new Set(eligibleForTop3.map((r) => r.restaurant_name));
+  const fallbackTop3 =
+    !eligibleForTop3.length && restaurants.length ? restaurants.slice(0, 3) : [];
+
   return NextResponse.json({
-    top3: restaurants.slice(0, 3),
-    others: restaurants.slice(3, 15),
+    top3: (eligibleForTop3.length ? eligibleForTop3 : fallbackTop3).slice(0, 3),
+    others: restaurants
+      .filter((r) => !eligibleNames.has(r.restaurant_name))
+      .filter((r) => !fallbackTop3.some((f) => f.restaurant_name === r.restaurant_name))
+      .slice(0, 12),
     countRestaurants: restaurants.length,
     countRooms: rows.length,
   });

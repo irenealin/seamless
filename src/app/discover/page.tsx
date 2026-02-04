@@ -83,6 +83,7 @@ export default function DiscoverPage() {
   const [center, setCenter] = useState<{ lat: number; lng: number } | null>(
     isExplore ? DEFAULT_CENTER : null
   );
+<<<<<<< Updated upstream
   const [areaLabel, setAreaLabel] = useState(isExplore ? DEFAULT_AREA_LABEL : "");
 
   // Filters (ALL start empty)
@@ -93,13 +94,30 @@ export default function DiscoverPage() {
 
   const [eventType, setEventType] = useState("");
   const [timeNeeded, setTimeNeeded] = useState("");
-  const [dateNeeded, setDateNeeded] = useState("");
 
   const [privacyLevel, setPrivacyLevel] = useState("");
   const [noiseLevel, setNoiseLevel] = useState("");
   const [vibe, setVibe] = useState("");
 
-  const [budgetType, setBudgetType] = useState<"total" | "per_head">("total");
+  const [maxCakeFee, setMaxCakeFee] = useState("");
+  const [maxCorkageFee, setMaxCorkageFee] = useState("");
+=======
+  const [requirements, setRequirements] = useState<Requirements>(() =>
+    isExplore ? { areaLabel: DEFAULT_AREA_LABEL } : {}
+  );
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      role: "assistant",
+      content:
+        "Tell me about your event — location, headcount, budget, date, time, and desired vibe. I’ll ask one follow-up if needed.",
+    },
+  ]);
+  const [draft, setDraft] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const [missing, setMissing] = useState<string[]>([]);
+  const [isComplete, setIsComplete] = useState(false);
+  const transcriptEndRef = useRef<HTMLDivElement | null>(null);
+>>>>>>> Stashed changes
 
   // API response state
   const [loading, setLoading] = useState(false);
@@ -172,20 +190,54 @@ export default function DiscoverPage() {
   }
 
   function buildQuoteBody() {
+<<<<<<< Updated upstream
     const lines: string[] = [];
     if (headcount) lines.push(`Capacity: ${headcount} guests`);
     if (privacyLevel) lines.push(`Privacy: ${privacyLevel}`);
     if (noiseLevel) lines.push(`Noise: ${noiseLevel}`);
     if (vibe) lines.push(`Vibe: ${vibe}`);
     if (needsAV) lines.push("A/V: needed");
-    if (budgetTotal)
-      lines.push(
-        `Budget: no more than $${budgetTotal} (${budgetType === "per_head" ? "per head" : "total"})`
-      );
+    if (budgetTotal) lines.push(`Budget: no more than $${budgetTotal}`);
     if (eventType) lines.push(`Event type: ${eventType}`);
     if (areaLabel) lines.push(`Area: ${areaLabel}`);
     if (radiusMiles) lines.push(`Radius: ${radiusMiles} miles`);
+    if (maxCakeFee) lines.push(`Max cake fee: $${maxCakeFee}`);
+    if (maxCorkageFee) lines.push(`Max corkage fee: $${maxCorkageFee}`);
     return lines.length ? lines.join("\n") : "No specific requirements provided.";
+=======
+    const areaLabel = requirements.areaLabel ?? "";
+    const radiusMiles = requirements.radiusMiles ?? "";
+    const headcount = requirements.headcount ?? "";
+    const budgetTotal = requirements.budgetTotal ?? "";
+    const needsAV = requirements.needsAV ?? false;
+    const eventType = requirements.eventType ?? "";
+    const dateNeeded = requirements.dateNeeded ?? "";
+    const timeNeeded = requirements.timeNeeded ?? "";
+    const privacyLevel = requirements.privacyLevel ?? "";
+    const noiseLevel = requirements.noiseLevel ?? "";
+    const vibe = requirements.vibe ?? "";
+    const maxCakeFee = requirements.maxCakeFee ?? "";
+    const maxCorkageFee = requirements.maxCorkageFee ?? "";
+
+    const parts: string[] = [];
+    if (eventType) parts.push(`The event is a ${eventType}`);
+    if (headcount) parts.push(`for about ${headcount} guests`);
+    if (dateNeeded || timeNeeded) {
+      const dateText = dateNeeded ? `on ${dateNeeded}` : "";
+      const timeText = timeNeeded ? `at ${timeNeeded}` : "";
+      parts.push(`scheduled ${[dateText, timeText].filter(Boolean).join(" ")}`);
+    }
+    if (privacyLevel) parts.push(`We prefer a ${privacyLevel.toLowerCase()} setup`);
+    if (noiseLevel) parts.push(`with a ${noiseLevel.toLowerCase()} noise level`);
+    if (vibe) parts.push(`and a ${vibe.toLowerCase()} vibe`);
+    if (needsAV) parts.push("A/V support would be needed");
+    if (budgetTotal) parts.push(`Our budget is up to $${budgetTotal}`);
+    if (maxCakeFee) parts.push(`and we'd like the cake fee to be no more than $${maxCakeFee}`);
+    if (maxCorkageFee) parts.push(`with corkage capped at $${maxCorkageFee}`);
+
+    const sentence = parts.join(", ") + (parts.length ? "." : "");
+    return sentence || "We don’t have any specific requirements yet.";
+>>>>>>> Stashed changes
   }
 
   function requestQuoteDraft(item: RestaurantResult) {
@@ -194,7 +246,31 @@ export default function DiscoverPage() {
       return;
     }
 
+<<<<<<< Updated upstream
+    const dateLabel = timeNeeded || "TBD";
+=======
+    const lastUserMessage =
+      [...messages].reverse().find((m) => m.role === "user")?.content?.trim() ?? "";
+    const normalizeSentence = (value: string) => {
+      const cleaned = value.replace(/\s+/g, " ").trim();
+      if (!cleaned) return "";
+      return /[.!?]$/.test(cleaned) ? cleaned : `${cleaned}.`;
+    };
+    const stripYear = (value: string) => value.replace(/,?\s*\b(19|20)\d{2}\b/g, "").trim();
+    const headcount = requirements.headcount ?? "";
+    const dateNeeded = requirements.dateNeeded ? stripYear(requirements.dateNeeded) : "";
+    const timeNeeded = requirements.timeNeeded ?? "";
     const dateLabel = dateNeeded || "TBD";
+    const dateTimeLine =
+      dateNeeded && timeNeeded
+        ? `${dateNeeded} at ${timeNeeded}`
+        : dateNeeded || timeNeeded || "TBD";
+    const areaLabel = requirements.areaLabel ?? "";
+    const radiusMiles = requirements.radiusMiles ?? "";
+    const locationLine = areaLabel
+      ? ` in ${areaLabel}${radiusMiles ? ` (within ${radiusMiles} miles)` : ""}`
+      : "";
+>>>>>>> Stashed changes
     const subject = `Private Dining at ${item.restaurant_name} - ${dateLabel}`;
     const body = `Hi ${item.restaurant_name} Team,\n\nI'm reaching out to inquire about booking a private dining room on ${dateLabel}. We’re planning an intimate dinner for a group of leaders from top tech companies and would love to host at your beautiful space.\n\nWe are looking for a private, enclosed space${
       headcount ? ` with capacity for ${headcount} guests` : ""
@@ -242,12 +318,32 @@ export default function DiscoverPage() {
     setData(null);
 
     // Only send filters that the user filled in
-    const payload: any = { lat: activeCenter.lat, lng: activeCenter.lng };
+    const payload: any = {
+      lat: activeCenter.lat,
+      lng: activeCenter.lng,
+      areaLabel: requirements.areaLabel ?? undefined,
+    };
 
+<<<<<<< Updated upstream
     if (radiusMiles) payload.radiusMiles = Number(radiusMiles);
     if (headcount) payload.headcount = Number(headcount);
     if (budgetTotal) payload.budgetTotal = Number(budgetTotal);
-    if (budgetTotal) payload.budgetType = budgetType;
+=======
+    const parseNumber = (value?: string) => {
+      if (!value) return undefined;
+      const cleaned = value.replace(/[^0-9.]/g, "");
+      const num = Number(cleaned);
+      return Number.isFinite(num) ? num : undefined;
+    };
+>>>>>>> Stashed changes
+
+    const radiusMiles = parseNumber(requirements.radiusMiles);
+    const headcount = parseNumber(requirements.headcount);
+    const budgetTotal = parseNumber(requirements.budgetTotal);
+
+    if (radiusMiles != null) payload.radiusMiles = radiusMiles;
+    if (headcount != null) payload.headcount = headcount;
+    if (budgetTotal != null) payload.budgetTotal = budgetTotal;
 
     if (eventType) payload.eventType = eventType;
     if (timeNeeded) payload.timeNeeded = timeNeeded;
@@ -256,7 +352,10 @@ export default function DiscoverPage() {
     if (noiseLevel) payload.noiseLevel = noiseLevel;
     if (vibe) payload.vibe = vibe;
 
-    if (needsAV) payload.needsAV = true;
+    if (requirements.needsAV) payload.needsAV = true;
+
+    if (maxCakeFee) payload.maxCakeFee = Number(maxCakeFee);
+    if (maxCorkageFee) payload.maxCorkageFee = Number(maxCorkageFee);
 
     const resp = await fetch("/api/recommendations", {
       method: "POST",
@@ -275,25 +374,66 @@ export default function DiscoverPage() {
   }, [isExplore]);
 
   return (
-    <div className="discoverPage">
-      <div className="grid2">
-        {/* LEFT: Planner */}
-        <div style={{ display: "grid", gap: 16 }}>
+<<<<<<< Updated upstream
+    <div className="grid2">
+      {/* LEFT: Planner + Results */}
+      <div style={{ display: "grid", gap: 16 }}>
         <div className="card">
           <div className="cardInner">
             <div className="small" style={{ fontWeight: 900 }}>
               Tell us what you need — we’ll match you with the best private dining venues.
             </div>
+=======
+    <div className="discoverPage">
+      <div className="grid2">
+        {/* LEFT: AI Intake Chat */}
+        <div style={{ display: "grid", gap: 16 }}>
+          <div className="card">
+            <div className="cardInner">
+              <div className="small" style={{ fontWeight: 900 }}>
+                Describe your event — the AI concierge will extract details and ask one follow-up
+                only if needed.
+              </div>
+>>>>>>> Stashed changes
 
-            <div className="formGrid" style={{ marginTop: 12 }}>
-              <div className="span2">
-                <PlaceSearch
-                  defaultValue={areaLabel}
-                  onSelect={(x) => {
-                    setCenter({ lat: x.lat, lng: x.lng });
-                    setAreaLabel(x.label);
+              <div>
+                <label className="label">Radius (miles)</label>
+                <input
+                  className="input"
+                  value={radiusMiles}
+                  onChange={(e) => setRadiusMiles(e.target.value)}
+                  placeholder="e.g., 5"
+                  inputMode="numeric"
+                />
+              </div>
+
+              <div>
+                <label className="label">Headcount</label>
+                <input
+                  className="input"
+                  value={headcount}
+                  onChange={(e) => setHeadcount(e.target.value)}
+                  placeholder="e.g., 20"
+                  inputMode="numeric"
+                />
+              </div>
+
+              <div>
+                <label className="label">Max budget ($)</label>
+                <input
+                  className="input"
+                  rows={3}
+                  placeholder="Paste a paragraph or type a message..."
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      sendMessage();
+                    }
                   }}
                 />
+<<<<<<< Updated upstream
               </div>
 
               <div>
@@ -328,17 +468,6 @@ export default function DiscoverPage() {
                   inputMode="numeric"
                 />
               </div>
-              <div>
-                <label className="label">Budget type</label>
-                <select
-                  className="input"
-                  value={budgetType}
-                  onChange={(e) => setBudgetType(e.target.value as "total" | "per_head")}
-                >
-                  <option value="total">Total F&amp;B min spend</option>
-                  <option value="per_head">Per head</option>
-                </select>
-              </div>
 
               <div>
                 <label className="label">Event type</label>
@@ -350,15 +479,6 @@ export default function DiscoverPage() {
                 />
               </div>
 
-              <div>
-                <label className="label">Date</label>
-                <input
-                  className="input"
-                  type="date"
-                  value={dateNeeded}
-                  onChange={(e) => setDateNeeded(e.target.value)}
-                />
-              </div>
               <div>
                 <label className="label">Time needed</label>
                 <input
@@ -406,6 +526,28 @@ export default function DiscoverPage() {
                 />
               </div>
 
+              <div>
+                <label className="label">Max cake fee ($)</label>
+                <input
+                  className="input"
+                  value={maxCakeFee}
+                  onChange={(e) => setMaxCakeFee(e.target.value)}
+                  placeholder="e.g., 25"
+                  inputMode="numeric"
+                />
+              </div>
+
+              <div>
+                <label className="label">Max corkage fee ($)</label>
+                <input
+                  className="input"
+                  value={maxCorkageFee}
+                  onChange={(e) => setMaxCorkageFee(e.target.value)}
+                  placeholder="e.g., 40"
+                  inputMode="numeric"
+                />
+              </div>
+
               <div className="span3">
                 <label style={{ display: "flex", gap: 10, alignItems: "center" }}>
                   <input
@@ -417,8 +559,82 @@ export default function DiscoverPage() {
                     Needs A/V
                   </span>
                 </label>
+=======
+                <div className="row">
+                  <button
+                    className="btn btnPrimary"
+                    onClick={sendMessage}
+                    disabled={isSending}
+                  >
+                    {isSending ? "Sending..." : "Send"}
+                  </button>
+                  <div className="small">
+                    Shift+Enter for a new line.
+                  </div>
+                </div>
+>>>>>>> Stashed changes
               </div>
             </div>
+          </div>
+
+          <div className="card">
+            <div className="cardInner">
+              <div className="small" style={{ fontWeight: 900 }}>
+                Use extracted details
+              </div>
+
+              <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
+                <PlaceSearch
+                  defaultValue={
+                    requirements.areaLabel || (isExplore ? DEFAULT_AREA_LABEL : "")
+                  }
+                  onSelect={(x) => {
+                    setCenter({ lat: x.lat, lng: x.lng });
+                    setRequirements((prev) => ({ ...prev, areaLabel: x.label }));
+                  }}
+                />
+
+                <div style={{ display: "grid", gap: 8 }}>
+                  {[
+                    { label: "Headcount", value: requirements.headcount },
+                    { label: "Budget", value: requirements.budgetTotal },
+                    { label: "Date", value: requirements.dateNeeded },
+                    { label: "Time", value: requirements.timeNeeded },
+                    { label: "Radius", value: requirements.radiusMiles },
+                    { label: "Event type", value: requirements.eventType },
+                    { label: "Privacy", value: requirements.privacyLevel },
+                    { label: "Noise", value: requirements.noiseLevel },
+                    { label: "Vibe", value: requirements.vibe },
+                    { label: "Needs A/V", value: requirements.needsAV ? "Yes" : "" },
+                    { label: "Max cake fee", value: requirements.maxCakeFee },
+                    { label: "Max corkage fee", value: requirements.maxCorkageFee },
+                  ]
+                    .filter((item) => item.value)
+                    .map((item) => (
+                      <div
+                        key={item.label}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: 10,
+                          padding: "8px 10px",
+                          borderRadius: 12,
+                          border: "1px solid var(--border)",
+                          background: "rgba(255,255,255,0.04)",
+                        }}
+                      >
+                        <div className="small" style={{ fontWeight: 700 }}>
+                          {item.label}
+                        </div>
+                        <div className="small" style={{ textAlign: "right" }}>
+                          {item.value}
+                        </div>
+                      </div>
+                    ))}
+                  {!Object.values(requirements).some((value) => value) ? (
+                    <div className="small">No extracted details yet.</div>
+                  ) : null}
+                </div>
 
             <div className="row" style={{ marginTop: 12 }}>
               <button
@@ -441,25 +657,88 @@ export default function DiscoverPage() {
               ) : null}
             </div>
 
-            {data?.error ? (
-              <div className="small" style={{ marginTop: 10, color: "crimson" }}>
-                Error: {data.error}
+                {data?.error ? (
+                  <div className="small" style={{ marginTop: 10, color: "crimson" }}>
+                    Error: {data.error}
+                  </div>
+                ) : null}
               </div>
-            ) : null}
+            </div>
           </div>
         </div>
 
-        </div>
+<<<<<<< Updated upstream
+        {/* RESULTS */}
+        {showDefaultHeader ? (
+          allSorted.length ? (
+            <div style={{ display: "grid", gap: 10 }}>
+              <div className="small" style={{ fontWeight: 900 }}>
+                {DEFAULT_AREA_LABEL}
+              </div>
+              <div className="resultsGrid">
+                {allSorted.map((r) => (
+                  <RestaurantCard
+                    key={r.restaurant_name}
+                    item={r}
+                    onClick={() => setSelected(r)}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null
+        ) : (
+          <>
+            {data?.top3?.length ? (
+              <div style={{ display: "grid", gap: 10 }}>
+                <div className="small" style={{ fontWeight: 900 }}>
+                  Top 3 recommendations
+                </div>
+                <div className="resultsGrid">
+                  {data.top3.map((r, i) => (
+                    <RestaurantCard
+                      key={r.restaurant_name}
+                      item={r}
+                      badge={`Top ${i + 1}`}
+                      onClick={() => setSelected(r)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
+            {data?.others?.length ? (
+              <div style={{ display: "grid", gap: 10 }}>
+                <div className="small" style={{ fontWeight: 900 }}>
+                  Other restaurants
+                </div>
+                <div className="resultsGrid">
+                  {data.others.map((r) => (
+                    <RestaurantCard
+                      key={r.restaurant_name}
+                      item={r}
+                      onClick={() => setSelected(r)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </>
+        )}
+      </div>
+
+      {/* RIGHT: Map */}
+      <div style={{ alignSelf: "start" }}>
+=======
         {/* RIGHT: Map */}
-        <div style={{ alignSelf: "start", display: "grid", gap: 16 }}>
+        <div className="mapColumn">
+>>>>>>> Stashed changes
         {center ? (
           <GoogleMapPanel
             center={center}
             points={points}
             onSelect={(name) => {
-              // optional: scroll to card / highlight later
-              console.log("Selected on map:", name);
+              const match = allResults.find((r) => r.restaurant_name === name) ?? null;
+              setSelected(match);
             }}
           />
         ) : (
@@ -470,6 +749,8 @@ export default function DiscoverPage() {
           </div>
         )}
       </div>
+<<<<<<< Updated upstream
+=======
       </div>
 
       {/* RESULTS */}
@@ -481,11 +762,12 @@ export default function DiscoverPage() {
             </div>
             <div className="resultsGrid">
               {allSorted.map((r) => (
-                <RestaurantCard
-                  key={r.restaurant_name}
-                  item={r}
-                  onClick={() => setSelected(r)}
-                />
+                <div key={r.restaurant_name} ref={setCardRef(r.restaurant_name)}>
+                  <RestaurantCard
+                    item={r}
+                    onClick={() => setSelected(r)}
+                  />
+                </div>
               ))}
             </div>
           </div>
@@ -499,12 +781,13 @@ export default function DiscoverPage() {
               </div>
               <div className="resultsGrid">
                 {data.top3.map((r, i) => (
-                  <RestaurantCard
-                    key={r.restaurant_name}
-                    item={r}
-                    badge={`Top ${i + 1}`}
-                    onClick={() => setSelected(r)}
-                  />
+                  <div key={r.restaurant_name} ref={setCardRef(r.restaurant_name)}>
+                    <RestaurantCard
+                      item={r}
+                      badge={`Top ${i + 1}`}
+                      onClick={() => setSelected(r)}
+                    />
+                  </div>
                 ))}
               </div>
             </div>
@@ -517,17 +800,19 @@ export default function DiscoverPage() {
               </div>
               <div className="resultsGrid">
                 {data.others.map((r) => (
-                  <RestaurantCard
-                    key={r.restaurant_name}
-                    item={r}
-                    onClick={() => setSelected(r)}
-                  />
+                  <div key={r.restaurant_name} ref={setCardRef(r.restaurant_name)}>
+                    <RestaurantCard
+                      item={r}
+                      onClick={() => setSelected(r)}
+                    />
+                  </div>
                 ))}
               </div>
             </div>
           ) : null}
         </>
       )}
+>>>>>>> Stashed changes
 
       {selected ? (
         <div className="modalOverlay" onClick={() => setSelected(null)}>

@@ -6,6 +6,7 @@ import { PlaceSearch } from "@/components/PlaceSearch";
 import { GoogleMapPanel } from "@/components/GoogleMapPanel";
 import { RestaurantCard } from "@/components/RestaurantCard";
 import type { Requirements } from "@/lib/intakeTypes";
+import { loadGoogleMaps } from "@/lib/googleMaps";
 
 const DEFAULT_CENTER = { lat: 37.4419, lng: -122.143 };
 const DEFAULT_AREA_LABEL = "Palo Alto, CA";
@@ -125,7 +126,7 @@ export default function DiscoverPage() {
     {
       role: "assistant",
       content:
-        "Tell me about your event — location, headcount, budget, date, time, and desired vibe. I’ll ask one follow-up if needed.",
+        "Welcome to Seamless! Happy to help you find your next private dining room. To get started, tell me about your event — location, headcount, budget, date, time, and desired vibe. I’ll ask follow-ups if needed.",
     },
   ]);
   const [draft, setDraft] = useState("");
@@ -147,6 +148,8 @@ export default function DiscoverPage() {
   const [showDefaultHeader, setShowDefaultHeader] = useState(true);
   const [roomIndexes, setRoomIndexes] = useState<Record<string, number>>({});
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const lastManualAreaLabelRef = useRef<string | null>(null);
+  const lastGeocodedAreaLabelRef = useRef<string | null>(null);
 
   function setCardRef(name: string) {
     return (el: HTMLDivElement | null) => {
@@ -210,6 +213,38 @@ export default function DiscoverPage() {
       setRequirements((prev) => ({ ...prev, areaLabel: DEFAULT_AREA_LABEL }));
     }
   }, [isExplore, requirements.areaLabel]);
+
+  useEffect(() => {
+    const label = requirements.areaLabel?.trim();
+    if (!label) return;
+
+    if (label === lastManualAreaLabelRef.current) {
+      lastGeocodedAreaLabelRef.current = label;
+      return;
+    }
+
+    if (label === lastGeocodedAreaLabelRef.current && center) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        await loadGoogleMaps(["maps"]);
+        const geocoder = new google.maps.Geocoder();
+        const { results } = await geocoder.geocode({ address: label });
+        const loc = results?.[0]?.geometry?.location;
+        if (!loc || cancelled) return;
+        setCenter({ lat: loc.lat(), lng: loc.lng() });
+        lastGeocodedAreaLabelRef.current = label;
+      } catch (err) {
+        console.error("Failed to geocode area label:", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [requirements.areaLabel, center]);
 
   useEffect(() => {
     const missingNext = REQUIRED_FIELDS.filter((field) => {
@@ -521,8 +556,9 @@ export default function DiscoverPage() {
               <div style={{ display: "grid", gap: 4 }}>
                 <div style={{ fontWeight: 900 }}>AI Concierge</div>
                 <div className="small">
-                  Describe your event — location, headcount, budget, date, time, and desired vibe.
-                  I’ll ask one follow-up if needed.
+                  Before we start, type the location you’re interested in into the area/address box
+                  in the Live Event Snapshot. Then describe your event — location, headcount,
+                  budget, date, time, and desired vibe. I’ll ask one follow-up if needed.
                 </div>
               </div>
 
@@ -604,7 +640,8 @@ export default function DiscoverPage() {
               <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
                 {!requirements.areaLabel ? (
                   <div className="small" style={{ color: "var(--muted)" }}>
-                    Select a location from the dropdown to enable recommendations.
+                    Type the location you’re interested in into the area/address box to enable
+                    recommendations.
                   </div>
                 ) : null}
                 <PlaceSearch
@@ -612,6 +649,8 @@ export default function DiscoverPage() {
                     requirements.areaLabel || (isExplore ? DEFAULT_AREA_LABEL : "")
                   }
                   onSelect={(x) => {
+                    lastManualAreaLabelRef.current = x.label;
+                    lastGeocodedAreaLabelRef.current = x.label;
                     setCenter({ lat: x.lat, lng: x.lng });
                     setRequirements((prev) => ({ ...prev, areaLabel: x.label }));
                   }}
@@ -708,7 +747,7 @@ export default function DiscoverPage() {
 
                 <div className="small" style={{ color: "var(--muted)" }}>
                   {!requirements.areaLabel
-                    ? "Please select a location from the area/address dropdown in Live Event Snapshot to start recommendations."
+                    ? "Please type the location you’re interested in into the area/address box in Live Event Snapshot to start recommendations."
                     : missingRequired.length
                       ? `Need: ${missingRequired.map((f) => MISSING_LABELS[f] ?? f).join(", ")}`
                       : loading

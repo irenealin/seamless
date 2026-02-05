@@ -37,6 +37,7 @@ export type SearchInput = {
   lat?: number;
   lng?: number;
   radiusMiles?: number;
+  areaLabel?: string;
   headcount?: number;
   privacyLevel?: string;
   noiseLevel?: string;
@@ -61,10 +62,21 @@ function distanceMiles(aLat: number, aLng: number, bLat: number, bLng: number) {
 }
 
 export function scoreRow(row: RestaurantRoomRow, input: SearchInput) {
-  let score = 0;
+  let priorityScore = 0;
+  let secondaryScore = 0;
   const reasons: string[] = [];
   let distanceMilesAway: number | null = null;
   let withinRadius: boolean | null = null;
+
+  const normalize = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const cityTokenRaw = (input.areaLabel ?? "").split(",")[0]?.trim();
+  const cityToken = cityTokenRaw ? normalize(cityTokenRaw) : "";
 
   // distance
   if (input.lat != null && input.lng != null && row.lat != null && row.lng != null) {
@@ -74,43 +86,60 @@ export function scoreRow(row: RestaurantRoomRow, input: SearchInput) {
       const radius = input.radiusMiles;
       withinRadius = d <= radius;
       if (withinRadius) {
-        score += Math.max(0, 20 - d * 3);
+        priorityScore += Math.max(0, 60 - d * 5);
         reasons.push(`${d.toFixed(1)} miles away`);
       } else {
-        score -= 50;
+        priorityScore -= 80;
         reasons.push(`${d.toFixed(1)} miles away (outside radius)`);
       }
     } else {
       // No radius provided; treat all city matches as in-radius and only reward proximity.
       withinRadius = true;
-      score += Math.max(0, 10 - d);
+      priorityScore += Math.max(0, 30 - d * 2);
       reasons.push(`${d.toFixed(1)} miles away`);
+    }
+  }
+
+  // location label match (when no precise geo or to reinforce city match)
+  if (cityToken && row.address) {
+    const normAddress = normalize(row.address);
+    if (normAddress.includes(cityToken)) {
+      priorityScore += 30;
+      reasons.push(`Address match: ${cityTokenRaw}`);
+    } else {
+      priorityScore -= 20;
     }
   }
 
   // capacity
   if (input.headcount && row.seated_capacity) {
-    if (row.seated_capacity >= input.headcount) {
-      score += 20;
-      reasons.push(`Seated cap ${row.seated_capacity}`);
+    const diff = row.seated_capacity - input.headcount;
+    if (diff >= 0) {
+      const closeness = Math.max(0, 40 - diff * 3);
+      priorityScore += 40 + closeness;
+      if (diff === 0) {
+        reasons.push(`Seated cap ${row.seated_capacity} (exact fit)`);
+      } else {
+        reasons.push(`Seated cap ${row.seated_capacity}`);
+      }
     } else {
-      score -= 40;
+      priorityScore -= 90 + Math.abs(diff) * 4;
       reasons.push(`Too small for ${input.headcount}`);
     }
   }
 
   // privacy/noise/vibe
   if (input.privacyLevel && row.privacy_level?.toLowerCase().includes(input.privacyLevel.toLowerCase())) {
-    score += 10;
+    secondaryScore += 6;
     reasons.push(`Privacy: ${row.privacy_level}`);
   }
   if (input.noiseLevel && row.noise_level?.toLowerCase().includes(input.noiseLevel.toLowerCase())) {
-    score += 8;
+    secondaryScore += 5;
     reasons.push(`Noise: ${row.noise_level}`);
   }
   const vibeHay = `${row.primary_vibe ?? ""} ${row.vibe_tags ?? ""}`.toLowerCase();
   if (input.vibe && vibeHay.includes(input.vibe.toLowerCase())) {
-    score += 8;
+    secondaryScore += 6;
     reasons.push(`Vibe match: ${input.vibe}`);
   }
 
@@ -118,10 +147,10 @@ export function scoreRow(row: RestaurantRoomRow, input: SearchInput) {
   if (input.needsAV) {
     const av = (row.a_v ?? "").toLowerCase();
     if (av.includes("yes") || av.includes("av") || av.includes("projector") || av.includes("mic")) {
-      score += 6;
+      secondaryScore += 15;
       reasons.push("A/V available");
     } else {
-      score -= 5;
+      secondaryScore -= 10;
       reasons.push("A/V unknown");
     }
   }
@@ -129,15 +158,16 @@ export function scoreRow(row: RestaurantRoomRow, input: SearchInput) {
   // budget (rough)
   if (input.budgetTotal && row.min_spend_estimate) {
     if (row.min_spend_estimate <= input.budgetTotal) {
-      score += 10;
+      priorityScore += 35;
       reasons.push(`Min spend ~$${row.min_spend_estimate}`);
     } else {
-      score -= 8;
+      priorityScore -= 40;
       reasons.push("Min spend may exceed budget");
     }
   } else if (row.min_spend_estimate) {
     reasons.push(`Min spend ~$${row.min_spend_estimate}`);
   }
 
-  return { score, reasons, distanceMilesAway, withinRadius };
+  const score = priorityScore + secondaryScore;
+  return { score, priorityScore, secondaryScore, reasons, distanceMilesAway, withinRadius };
 }

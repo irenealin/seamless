@@ -791,6 +791,39 @@ a{ color: inherit; text-decoration: none; }
   margin-bottom: 20px;
   justify-content: center;
 }
+.landingForm{ /* Styles the email capture form layout. */
+  display: grid; /* Uses a grid layout to stack form elements. */
+  gap: 14px; /* Adds spacing between form controls. */
+  max-width: 420px; /* Limits the form width for readability. */
+  margin: 0 auto; /* Centers the form within the hero copy. */
+} /* Ends the landing form styles. */
+.landingInput{ /* Styles the landing page email input. */
+  width: 100%; /* Makes the input fill the form width. */
+  padding: 14px 18px; /* Adds comfortable interior spacing. */
+  border-radius: 999px; /* Matches the rounded button shape. */
+  border: 1px solid rgba(10,10,10,0.18); /* Adds a subtle border for contrast. */
+  background: #ffffff; /* Ensures a clean input background. */
+  color: #0A0A0A; /* Sets readable text color on the light background. */
+  font-size: 16px; /* Keeps the input text legible. */
+  outline: none; /* Removes the default focus outline. */
+} /* Ends the landing input styles. */
+.landingInput:focus{ /* Styles the focus state for the landing input. */
+  border-color: rgba(212,175,55,0.7); /* Highlights the border on focus. */
+  box-shadow: 0 0 0 4px rgba(212,175,55,0.18); /* Adds a soft focus ring. */
+} /* Ends the landing input focus styles. */
+.landingHelper{ /* Styles the helper/label text above the input. */
+  font-size: 13px; /* Sets a smaller label size. */
+  color: rgba(45,45,45,0.7); /* Uses a muted label color. */
+  text-transform: uppercase; /* Matches the landing page typography style. */
+  letter-spacing: 0.18em; /* Adds spacing to the label letters. */
+  font-weight: 600; /* Emphasizes the label text slightly. */
+  margin: 0; /* Removes default margin for tighter layout. */
+} /* Ends the landing helper styles. */
+.landingError{ /* Styles the error message for the email form. */
+  font-size: 13px; /* Keeps the error text compact. */
+  color: #B3261E; /* Uses a strong red for error visibility. */
+  margin: 0; /* Removes default margin for alignment. */
+} /* Ends the landing error styles. */
 
 .landingBtn{
   border-radius: 999px;
@@ -807,6 +840,9 @@ a{ color: inherit; text-decoration: none; }
   background: linear-gradient(90deg, #D4AF37 0%, #F4E4C1 100%);
   color: var(--landing-black);
   box-shadow: 0 10px 26px rgba(212,175,55,0.25);
+
+  border: none;     
+  box-shadow: none; 
 }
 .landingBtnPrimary:hover{
   transform: translateY(-2px) scale(1.01);

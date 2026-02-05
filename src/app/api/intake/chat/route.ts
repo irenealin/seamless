@@ -82,7 +82,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Missing OPENAI_API_KEY" }, { status: 500 });
   }
 
-  const totalChars = parsed.data.messages.reduce((sum, msg) => sum + msg.content.length, 0);
+  const totalChars = parsed.data.messages.reduce<number>(
+    (sum, msg) => sum + msg.content.length,
+    0
+  );
   if (totalChars > 20000) {
     return NextResponse.json({ error: "Payload too large" }, { status: 413 });
   }

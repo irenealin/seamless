@@ -45,7 +45,7 @@ export default function Home() {
               <p>Curated venues. Fast booking. Flawless events.</p>
 
               <div className="landingActions">
-                <a className="landingBtn landingBtnPrimary" href="/discover">
+                <a className="landingBtn landingBtnPrimary" href="/book">{/* Routes to the email capture step before booking. */}
                   Book an Event
                 </a>
               </div>
@@ -88,4 +88,3 @@ export default function Home() {
     </div>
   );
 }
-

@@ -42,47 +42,32 @@ function formatRequirements(reqs: z.infer<typeof InputSchema>["requirements"]) {
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const parsed = InputSchema.safeParse(body);
+
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid input", details: parsed.error }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid input", details: parsed.error.flatten() },
+      { status: 400 }
+    );
   }
 
   const { restaurant_name, contact_email, requirements } = parsed.data;
 
-  const host = process.env.SMTP_HOST;
-  const port = process.env.SMTP_PORT;
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  const from = process.env.SMTP_FROM || user;
+  const subject = `Quote request — ${restaurant_name}`;
+  const emailBody =
+    `Hello,\n\n` +
+    `We'd like to request a quote for a private dining event at ${restaurant_name}.\n\n` +
+    `Requirements:\n${formatRequirements(requirements)}\n\n` +
+    `Thanks,\nSeamless`;
 
-  if (!host || !port || !user || !pass || !from) {
-    return NextResponse.json(
-      { error: "Email is not configured on the server." },
-      { status: 500 }
-    );
-  }
+  const mailto = `mailto:${encodeURIComponent(contact_email)}?subject=${encodeURIComponent(
+    subject
+  )}&body=${encodeURIComponent(emailBody)}`;
 
-  try {
-    const transporter = nodemailer.createTransport({
-      host,
-      port: Number(port),
-      secure: Number(port) === 465,
-      auth: { user, pass },
-    });
-
-    const text = `Hello,\n\nWe'd like to request a quote for a private dining event at ${restaurant_name}.\n\nRequirements:\n${formatRequirements(
-      requirements
-    )}\n\nThanks,\nSeamless`;
-
-    await transporter.sendMail({
-      from,
-      to: contact_email,
-      subject: `Quote request — ${restaurant_name}`,
-      text,
-    });
-
-    return NextResponse.json({ ok: true });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to send email.";
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
+  return NextResponse.json({
+    ok: true,
+    mailto,
+    subject,
+    body: emailBody,
+    to: contact_email,
+  });
 }

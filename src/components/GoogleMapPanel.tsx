@@ -123,7 +123,7 @@ export function GoogleMapPanel({
     <div
       ref={mapDivRef}
       style={{
-        height: 390,
+        height: 320,
         borderRadius: 16,
         overflow: "hidden",
         border: "1px solid var(--border)",

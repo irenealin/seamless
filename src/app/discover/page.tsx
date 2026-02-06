@@ -526,12 +526,21 @@ export default function DiscoverPage() {
         { role: "assistant", content: json.assistantMessage || "Thanks! Let me check that." },
       ]);
       const inferredArea = inferAreaLabel(text);
+      const lowerText = text.toLowerCase();
+      const mentionsPerPerson =
+        /\bper\s*(person|head|guest|pp)\b/.test(lowerText) || /\bpp\b/.test(lowerText);
+      const mentionsBudget = /\bbudget\b/.test(lowerText) || /\$[0-9]/.test(lowerText);
       if (json.requirements || inferredArea) {
         setRequirements((prev) => {
           const merged = { ...prev, ...(json.requirements ?? {}) };
           if (inferredArea) merged.areaLabel = inferredArea;
           return merged;
         });
+        if (mentionsPerPerson) {
+          setBudgetMode("perHead");
+        } else if (mentionsBudget || json.requirements?.budgetTotal) {
+          setBudgetMode("total");
+        }
         setRefreshTick((prev) => prev + 1);
       }
       if (Array.isArray(json.missing)) setMissing(json.missing);
@@ -675,10 +684,10 @@ export default function DiscoverPage() {
       <div className="discoverGrid">
         {/* LEFT: AI Intake Chat */}
         <div className="stickyColumn conciergePanel" style={{ display: "grid", gap: 12 }}>
-          <div className="card">
+          <div className="card conciergeCard">
             <div className="cardInner">
               <div style={{ display: "grid", gap: 4 }}>
-                <div style={{ fontWeight: 900 }}>AI Concierge</div>
+                <div className="sectionTitle">AI Concierge</div>
                 <div className="small">
                   Describe your event and I’ll update your live snapshot in real time.
                 </div>
@@ -686,47 +695,63 @@ export default function DiscoverPage() {
 
               <div
                 style={{
-                  marginTop: 12,
-                  display: "grid",
-                  gap: 10,
-                  maxHeight: 260,
-                  overflowY: "auto",
-                  padding: 12,
+                  marginTop: 10,
+                  height: 350,
                   borderRadius: 14,
-                  border: "1px solid var(--border)",
-                  background: "rgba(0,0,0,0.18)",
+                  border: "1px solid transparent",
+                  background: "transparent",
+                  overflow: "hidden",
                 }}
               >
-                {messages.map((msg, idx) => (
-                  <div
-                    key={`${msg.role}-${idx}`}
-                    style={{
-                      display: "flex",
-                      justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
-                    }}
-                  >
+                <div
+                  className="conciergeScroll"
+                  onWheelCapture={(e) => {
+                    const el = e.currentTarget;
+                    el.scrollTop += e.deltaY;
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  style={{
+                    height: "100%",
+                    overflowY: "auto",
+                    padding: 10,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 10,
+                    justifyContent: "flex-end",
+                  }}
+                >
+                  {messages.map((msg, idx) => (
                     <div
+                      key={`${msg.role}-${idx}`}
                       style={{
-                        maxWidth: "85%",
-                        padding: "10px 12px",
-                        borderRadius: 14,
-                        border: "1px solid var(--border)",
-                        background:
-                          msg.role === "user"
-                            ? "rgba(201, 163, 106, 0.18)"
-                            : "rgba(255, 255, 255, 0.06)",
+                        display: "flex",
+                        justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
                       }}
                     >
-                      <div className="small" style={{ whiteSpace: "pre-wrap" }}>
-                        {msg.content}
+                      <div
+                        style={{
+                          maxWidth: "85%",
+                          padding: "10px 12px",
+                          borderRadius: 14,
+                          border: "1px solid var(--border)",
+                          background:
+                            msg.role === "user"
+                              ? "rgba(201, 163, 106, 0.18)"
+                              : "rgba(255, 255, 255, 0.06)",
+                        }}
+                      >
+                        <div className="small" style={{ whiteSpace: "pre-wrap" }}>
+                          {msg.content}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-                <div ref={transcriptEndRef} />
+                  ))}
+                  <div ref={transcriptEndRef} />
+                </div>
               </div>
 
-              <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+              <div style={{ marginTop: 2, display: "grid", gap: 8, paddingBottom: 6 }}>
                 <textarea
                   className="input"
                   rows={2}
@@ -755,17 +780,30 @@ export default function DiscoverPage() {
             </div>
           </div>
 
-          <div className="card">
+          {center ? (
+            <GoogleMapPanel
+              center={center}
+              points={points}
+              onSelect={(name) => {
+                const match = allResults.find((r) => r.restaurant_name === name) ?? null;
+                setSelected(match);
+              }}
+            />
+          ) : (
+            <div className="card">
+              <div className="cardInner">
+                <div className="small">Select an area to show the map and get recommendations.</div>
+              </div>
+            </div>
+          )}
+        </div>
+        {/* RIGHT: Snapshot + Map + Results */}
+        <div className="mapColumn">
+          <div className="card snapshotStrip">
             <div className="cardInner">
-              <div style={{ fontWeight: 900 }}>Live Event Snapshot</div>
+              <div className="sectionTitle">Live Event Snapshot</div>
 
-              <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
-                {!requirements.areaLabel ? (
-                  <div className="small" style={{ color: "var(--muted)" }}>
-                    Type the location you’re interested in into the area/address box to enable
-                    recommendations.
-                  </div>
-                ) : null}
+              <div className="snapshotStripBody">
                 <PlaceSearch
                   defaultValue={
                     requirements.areaLabel || (isExplore ? DEFAULT_AREA_LABEL : "")
@@ -778,7 +816,8 @@ export default function DiscoverPage() {
                   }}
                 />
 
-                {(
+                <div className="snapshotStripFields">
+                  {(
                   [
                     {
                       key: "headcount",
@@ -805,12 +844,6 @@ export default function DiscoverPage() {
                       editPrompt: "Set time to 6:30pm.",
                     },
                     {
-                      key: "eventType",
-                      label: "Event type",
-                      value: requirements.eventType ?? "",
-                      editPrompt: "This is a team dinner.",
-                    },
-                    {
                       key: "privacyLevel",
                       label: "Privacy",
                       value: requirements.privacyLevel ?? "",
@@ -828,94 +861,86 @@ export default function DiscoverPage() {
                       value: requirements.noiseLevel ?? "",
                       editPrompt: "We want it to be quiet.",
                     },
+                    {
+                      key: "eventType",
+                      label: "Event type",
+                      value: requirements.eventType ?? "",
+                      editPrompt: "This is a team dinner.",
+                    },
                   ] as SnapshotField[]
                 ).map((row) => (
                   <div
                     key={row.label}
-                    className={`snapshotRow${lastUpdatedField === row.key ? " isUpdated" : ""}`}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr auto",
-                      gap: 10,
-                      padding: "8px 10px",
-                      borderRadius: 12,
-                      border: "1px solid var(--border)",
-                      background: "rgba(255,255,255,0.04)",
-                    }}
+                    className={`snapshotRow snapshotStripItem${
+                      lastUpdatedField === row.key ? " isUpdated" : ""
+                    }`}
                   >
-                    <div>
-                      <div className="small" style={{ fontWeight: 700 }}>
-                        {row.label}
-                      </div>
+                    <div className="snapshotStripContent">
+                      <div className="snapshotStripLabel">{row.label}</div>
                       {editingField === row.key ? (
-                        <input
-                          className="input"
-                          value={editingValue}
-                          autoFocus
-                          onChange={(e) => setEditingValue(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              commitInlineEdit(row.key, editingValue);
-                            }
-                            if (e.key === "Escape") {
-                              setEditingField(null);
-                            }
-                          }}
-                          onBlur={() => commitInlineEdit(row.key, editingValue)}
-                        />
+                        <div className="snapshotStripInputRow">
+                          {row.key === "budgetTotal" ? (
+                            <span className="snapshotStripCurrency">$</span>
+                          ) : null}
+                          <input
+                            className="input snapshotStripInput"
+                            value={editingValue}
+                            autoFocus
+                            onChange={(e) => setEditingValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                commitInlineEdit(row.key, editingValue);
+                              }
+                              if (e.key === "Escape") {
+                                setEditingField(null);
+                              }
+                            }}
+                            onBlur={() => commitInlineEdit(row.key, editingValue)}
+                          />
+                        </div>
                       ) : (
-                        <div className="small" style={{ color: "var(--text)" }}>
+                        <div className="snapshotStripValue">
                           {row.value
                             ? row.key === "budgetTotal"
-                              ? `${row.value} ${budgetMode === "perHead" ? "per person" : "total"}`
+                              ? `$${row.value} ${
+                                  budgetMode === "perHead" ? "per person" : "total"
+                                }`
                               : row.value
                             : "Not specified"}
                         </div>
                       )}
-                      {row.key === "budgetTotal" ? (
-                        <div style={{ marginTop: 6, display: "flex", gap: 6 }}>
-                          <button
-                            type="button"
-                            className="btn btnGhost"
-                            onClick={() => setBudgetMode("total")}
-                            style={{
-                              padding: "3px 6px",
-                              borderRadius: 999,
-                              fontWeight: 400,
-                              fontSize: 11,
-                              border:
-                                budgetMode === "total"
-                                  ? "1px solid var(--accent)"
-                                  : "1px solid var(--border)",
-                              color: budgetMode === "total" ? "var(--accent)" : "inherit",
-                            }}
-                          >
-                            Total
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btnGhost"
-                            onClick={() => setBudgetMode("perHead")}
-                            style={{
-                              padding: "3px 6px",
-                              borderRadius: 999,
-                              fontWeight: 400,
-                              fontSize: 11,
-                              border:
-                                budgetMode === "perHead"
-                                  ? "1px solid var(--accent)"
-                                  : "1px solid var(--border)",
-                              color: budgetMode === "perHead" ? "var(--accent)" : "inherit",
-                            }}
-                          >
-                            Per person
-                          </button>
-                        </div>
-                      ) : null}
                     </div>
+                    {row.key === "budgetTotal" && editingField === row.key ? (
+                      <div className="snapshotStripToggle">
+                        <button
+                          type="button"
+                          className={`snapshotToggleBtn ${
+                            budgetMode === "total" ? "isActive" : ""
+                          }`}
+                          onClick={() => setBudgetMode("total")}
+                          onMouseDown={(e) => e.preventDefault()}
+                          aria-pressed={budgetMode === "total"}
+                        >
+                          Total
+                        </button>
+                        <button
+                          type="button"
+                          className={`snapshotToggleBtn ${
+                            budgetMode === "perHead" ? "isActive" : ""
+                          }`}
+                          onClick={() => setBudgetMode("perHead")}
+                          onMouseDown={(e) => e.preventDefault()}
+                          aria-pressed={budgetMode === "perHead"}
+                        >
+                          Per person
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="snapshotStripSpacer" />
+                    )}
                     <button
-                      className="btn btnGhost"
+                      className="btn btnGhost snapshotStripEdit"
                       onClick={() =>
                         editingField === row.key
                           ? commitInlineEdit(row.key, editingValue)
@@ -927,6 +952,7 @@ export default function DiscoverPage() {
                     </button>
                   </div>
                 ))}
+                </div>
 
                 <div className="small" style={{ color: "var(--muted)" }}>
                   {!requirements.areaLabel
@@ -953,26 +979,6 @@ export default function DiscoverPage() {
               </div>
             </div>
           </div>
-        </div>
-        {/* RIGHT: Map + Results */}
-        <div className="mapColumn">
-          {center ? (
-            <GoogleMapPanel
-              center={center}
-              points={points}
-              onSelect={(name) => {
-                const match = allResults.find((r) => r.restaurant_name === name) ?? null;
-                setSelected(match);
-              }}
-            />
-          ) : (
-            <div className="card">
-              <div className="cardInner">
-                <div className="small">Select an area to show the map and get recommendations.</div>
-              </div>
-            </div>
-          )}
-
           {showDefaultHeader ? (
             allSorted.length ? (
               <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
@@ -990,7 +996,12 @@ export default function DiscoverPage() {
             <>
               {data?.top3?.length ? (
                 <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
-                  <div className="sectionTitle sectionTitleDark">Top Recommendations</div>
+                  <div
+                    className="sectionTitle sectionTitleDark"
+                    style={{ fontWeight: 800 }}
+                  >
+                    Top Recommendations
+                  </div>
                   <div className="resultsGrid">
                     {data.top3.map((r, i) => (
                       <div key={r.restaurant_name} ref={setCardRef(r.restaurant_name)}>
@@ -1007,7 +1018,12 @@ export default function DiscoverPage() {
 
               {data?.others?.length ? (
                 <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
-                  <div className="sectionTitle sectionTitleDark">Other Restaurants</div>
+                  <div
+                    className="sectionTitle sectionTitleDark"
+                    style={{ fontWeight: 800 }}
+                  >
+                    Other Restaurants
+                  </div>
                   <div className="resultsGrid">
                     {data.others.map((r) => (
                       <div key={r.restaurant_name} ref={setCardRef(r.restaurant_name)}>

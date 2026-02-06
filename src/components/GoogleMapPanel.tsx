@@ -120,20 +120,15 @@ export function GoogleMapPanel({
   }, [center.lat, center.lng, points, onSelect]);
 
   return (
-    <div className="card">
-      <div className="cardInner">
-        <div style={{ fontWeight: 800, marginBottom: 10 }}>Map</div>
-        <div
-          ref={mapDivRef}
-          style={{
-            height: 390,
-            borderRadius: 16,
-            border: "1px solid var(--border)",
-            overflow: "hidden",
-            background: "#eef2f7",
-          }}
-        />
-      </div>
-    </div>
+    <div
+      ref={mapDivRef}
+      style={{
+        height: 390,
+        borderRadius: 16,
+        overflow: "hidden",
+        border: "1px solid var(--border)",
+        background: "#eef2f7",
+      }}
+    />
   );
 }

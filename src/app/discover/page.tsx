@@ -159,6 +159,9 @@ export default function DiscoverPage() {
   const draftRef = useRef<HTMLTextAreaElement | null>(null);
   const lastUpdatedRef = useRef<Requirements>({});
   const [lastUpdatedField, setLastUpdatedField] = useState<string | null>(null);
+  const [editingField, setEditingField] = useState<SnapshotField["key"] | null>(null);
+  const [editingValue, setEditingValue] = useState("");
+  const [budgetMode, setBudgetMode] = useState<"total" | "perHead">("total");
 
   // API response state
   const [loading, setLoading] = useState(false);
@@ -295,9 +298,29 @@ export default function DiscoverPage() {
     transcriptEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, isSending]);
 
-  function insertPrompt(text: string) {
-    setDraft((prev) => (prev ? `${prev}\n${text}` : text));
-    requestAnimationFrame(() => draftRef.current?.focus());
+  function startInlineEdit(field: SnapshotField["key"], value: string) {
+    setEditingField(field);
+    setEditingValue(value);
+  }
+
+  function commitInlineEdit(field: SnapshotField["key"], value: string) {
+    const nextValue = value.trim();
+    setRequirements((prev) => {
+      const next = { ...prev };
+      if (field === "location") {
+        if (nextValue) next.areaLabel = nextValue;
+        else delete next.areaLabel;
+        return next;
+      }
+      if (!nextValue) {
+        delete next[field as keyof Requirements];
+        return next;
+      }
+      next[field as keyof Requirements] = nextValue as Requirements[keyof Requirements];
+      return next;
+    });
+    setRefreshTick((prev) => prev + 1);
+    setEditingField(null);
   }
 
   function getPhotos(item: RestaurantResult) {
@@ -657,9 +680,7 @@ export default function DiscoverPage() {
               <div style={{ display: "grid", gap: 4 }}>
                 <div style={{ fontWeight: 900 }}>AI Concierge</div>
                 <div className="small">
-                  Before we start, type the location you’re interested in into the area/address box
-                  in the Live Event Snapshot. Then describe your event — location, headcount,
-                  budget, and desired vibe. I’ll ask one follow-up if needed.
+                  Describe your event and I’ll update your live snapshot in real time.
                 </div>
               </div>
 
@@ -760,12 +781,6 @@ export default function DiscoverPage() {
                 {(
                   [
                     {
-                      key: "location",
-                      label: "Location",
-                      value: requirements.areaLabel ?? "",
-                      editPrompt: "Set the location to SOMA, San Francisco.",
-                    },
-                    {
                       key: "headcount",
                       label: "Guests",
                       value: requirements.headcount ?? "",
@@ -832,16 +847,83 @@ export default function DiscoverPage() {
                       <div className="small" style={{ fontWeight: 700 }}>
                         {row.label}
                       </div>
-                      <div className="small" style={{ color: "var(--text)" }}>
-                        {row.value ? row.value : "Not specified"}
-                      </div>
+                      {editingField === row.key ? (
+                        <input
+                          className="input"
+                          value={editingValue}
+                          autoFocus
+                          onChange={(e) => setEditingValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              commitInlineEdit(row.key, editingValue);
+                            }
+                            if (e.key === "Escape") {
+                              setEditingField(null);
+                            }
+                          }}
+                          onBlur={() => commitInlineEdit(row.key, editingValue)}
+                        />
+                      ) : (
+                        <div className="small" style={{ color: "var(--text)" }}>
+                          {row.value
+                            ? row.key === "budgetTotal"
+                              ? `${row.value} ${budgetMode === "perHead" ? "per person" : "total"}`
+                              : row.value
+                            : "Not specified"}
+                        </div>
+                      )}
+                      {row.key === "budgetTotal" ? (
+                        <div style={{ marginTop: 6, display: "flex", gap: 6 }}>
+                          <button
+                            type="button"
+                            className="btn btnGhost"
+                            onClick={() => setBudgetMode("total")}
+                            style={{
+                              padding: "3px 6px",
+                              borderRadius: 999,
+                              fontWeight: 400,
+                              fontSize: 11,
+                              border:
+                                budgetMode === "total"
+                                  ? "1px solid var(--accent)"
+                                  : "1px solid var(--border)",
+                              color: budgetMode === "total" ? "var(--accent)" : "inherit",
+                            }}
+                          >
+                            Total
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btnGhost"
+                            onClick={() => setBudgetMode("perHead")}
+                            style={{
+                              padding: "3px 6px",
+                              borderRadius: 999,
+                              fontWeight: 400,
+                              fontSize: 11,
+                              border:
+                                budgetMode === "perHead"
+                                  ? "1px solid var(--accent)"
+                                  : "1px solid var(--border)",
+                              color: budgetMode === "perHead" ? "var(--accent)" : "inherit",
+                            }}
+                          >
+                            Per person
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                     <button
                       className="btn btnGhost"
-                      onClick={() => insertPrompt(row.editPrompt)}
+                      onClick={() =>
+                        editingField === row.key
+                          ? commitInlineEdit(row.key, editingValue)
+                          : startInlineEdit(row.key, row.value)
+                      }
                       aria-label={`Edit ${row.label}`}
                     >
-                      ✎
+                      {editingField === row.key ? "✓" : "✎"}
                     </button>
                   </div>
                 ))}

@@ -7,6 +7,7 @@ import { GoogleMapPanel } from "@/components/GoogleMapPanel";
 import { RestaurantCard } from "@/components/RestaurantCard";
 import type { Requirements } from "@/lib/intakeTypes";
 import { loadGoogleMaps } from "@/lib/googleMaps";
+import { supabase } from "@/lib/supabaseClient";
 
 const DEFAULT_CENTER = { lat: 37.4419, lng: -122.143 };
 const DEFAULT_AREA_LABEL = "Palo Alto, CA";
@@ -405,7 +406,49 @@ export default function DiscoverPage() {
       item.contact_email
     )}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
-    window.location.href = mailto;
+    void trackCtaEvent("request_quote", item.restaurant_name ?? null).finally(() => {
+      window.location.href = mailto;
+    });
+  }
+
+  function viewVenue(item: RestaurantResult) {
+    setSelected(item);
+    void trackCtaEvent("view_venue", item.restaurant_name ?? null);
+  }
+
+  function getSessionId() {
+    if (typeof window === "undefined") return null;
+    const key = "seamless_session_id";
+    let value = window.localStorage.getItem(key);
+    if (!value) {
+      value = crypto.randomUUID();
+      window.localStorage.setItem(key, value);
+    }
+    return value;
+  }
+
+  function getStoredEmail() {
+    if (typeof window === "undefined") return null;
+    const raw = window.localStorage.getItem("seamless_booker_email");
+    if (!raw) return null;
+    const email = raw.trim().toLowerCase();
+    return email || null;
+  }
+
+  async function trackCtaEvent(eventType: "view_venue" | "request_quote", venueId: string | null) {
+    try {
+      const sessionId = getSessionId();
+      const email = getStoredEmail();
+      await supabase.from("cta_events").insert({
+        event_type: eventType,
+        page: "discover",
+        venue_id: venueId,
+        email,
+        session_id: sessionId,
+      });
+    } catch (err) {
+      console.error("CTA event insert failed:", err);
+    }
   }
 
   async function sendMessage() {
@@ -797,7 +840,7 @@ export default function DiscoverPage() {
                 <div className="resultsGrid">
                   {allSorted.map((r) => (
                     <div key={r.restaurant_name} ref={setCardRef(r.restaurant_name)}>
-                      <RestaurantCard item={r} onClick={() => setSelected(r)} />
+                      <RestaurantCard item={r} onClick={() => viewVenue(r)} />
                     </div>
                   ))}
                 </div>
@@ -814,7 +857,7 @@ export default function DiscoverPage() {
                         <RestaurantCard
                           item={r}
                           badge={`Top ${i + 1}`}
-                          onClick={() => setSelected(r)}
+                          onClick={() => viewVenue(r)}
                         />
                       </div>
                     ))}
@@ -828,7 +871,7 @@ export default function DiscoverPage() {
                   <div className="resultsGrid">
                     {data.others.map((r) => (
                       <div key={r.restaurant_name} ref={setCardRef(r.restaurant_name)}>
-                        <RestaurantCard item={r} onClick={() => setSelected(r)} />
+                        <RestaurantCard item={r} onClick={() => viewVenue(r)} />
                       </div>
                     ))}
                   </div>

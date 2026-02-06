@@ -395,6 +395,17 @@ export default function DiscoverPage() {
       alert("No contact email on file for this restaurant.");
       return;
     }
+    const contactValue = item.contact_email.trim();
+    const looksLikeEmail = /.+@.+\..+/.test(contactValue);
+    if (!looksLikeEmail) {
+      const href = contactValue.startsWith("http")
+        ? contactValue
+        : `https://${contactValue}`;
+      void trackCtaEvent("request_quote", item.restaurant_name ?? null).finally(() => {
+        window.open(href, "_blank", "noopener,noreferrer");
+      });
+      return;
+    }
 
     const lastUserMessage =
       [...messages].reverse().find((m) => m.role === "user")?.content?.trim() ?? "";
@@ -425,7 +436,7 @@ export default function DiscoverPage() {
     }\n\nPlease let me know if this date is available and if the space can accommodate our group. Thank you!\n`;
 
     const mailto = `mailto:${encodeURIComponent(
-      item.contact_email
+      contactValue
     )}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
     void trackCtaEvent("request_quote", item.restaurant_name ?? null).finally(() => {

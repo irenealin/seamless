@@ -336,8 +336,16 @@ export default function DiscoverPage() {
 
   function parseNumber(value: string | null | undefined) {
     if (!value) return null;
-    const cleaned = value.replace(/[^0-9.]/g, "");
-    const num = Number(cleaned);
+    const match = value.match(/(\d+(?:\.\d+)?)/);
+    if (!match) return null;
+    const num = Number(match[1]);
+    return Number.isFinite(num) ? num : null;
+  }
+
+  function extractPerPersonAmount(text: string) {
+    const match = text.match(/(\d+(?:\.\d+)?)\s*(?:per\s*(person|head|guest)|pp)\b/i);
+    if (!match) return null;
+    const num = Number(match[1]);
     return Number.isFinite(num) ? num : null;
   }
 
@@ -549,15 +557,30 @@ export default function DiscoverPage() {
         /\bper\s*(person|head|guest|pp)\b/.test(lowerText) || /\bpp\b/.test(lowerText);
       const mentionsBudget = /\bbudget\b/.test(lowerText) || /\$[0-9]/.test(lowerText);
       if (json.requirements || inferredArea) {
+        let mergedSnapshot: Requirements | null = null;
         setRequirements((prev) => {
           const merged = { ...prev, ...(json.requirements ?? {}) };
           if (inferredArea) merged.areaLabel = inferredArea;
+          mergedSnapshot = merged;
           return merged;
         });
         if (mentionsPerPerson) {
-          if (json.requirements?.budgetTotal) {
+          const merged = mergedSnapshot ?? requirements;
+          const perHeadFromText = extractPerPersonAmount(text);
+          if (perHeadFromText != null) {
+            const headcount = parseNumber(merged.headcount ?? "");
+            if (headcount != null) {
+              setRequirements((prev) => ({
+                ...prev,
+                budgetTotal: String(Math.round(perHeadFromText * headcount)),
+              }));
+              setBudgetMode("total");
+            } else {
+              setBudgetMode("perHead");
+            }
+          } else if (json.requirements?.budgetTotal) {
             const perHead = parseNumber(json.requirements.budgetTotal);
-            const headcount = parseNumber(requirements.headcount ?? "");
+            const headcount = parseNumber(merged.headcount ?? "");
             if (perHead != null && headcount != null) {
               setRequirements((prev) => ({
                 ...prev,
@@ -931,11 +954,7 @@ export default function DiscoverPage() {
                             ? row.key === "budgetTotal"
                               ? (() => {
                                   const budget = parseNumber(row.value);
-                                  const headcount = parseNumber(requirements.headcount ?? "");
                                   if (budget == null) return `$${row.value} total`;
-                                  if (budgetMode === "perHead" && headcount != null) {
-                                    return `$${Math.round(budget * headcount)} total`;
-                                  }
                                   return `$${budget} total`;
                                 })()
                               : row.value

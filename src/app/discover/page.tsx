@@ -893,13 +893,13 @@ export default function DiscoverPage() {
             <>
               {data?.top3?.length ? (
                 <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
-                  <div className="sectionTitle sectionTitleDark">Top 3 Recommendations</div>
+                  <div className="sectionTitle sectionTitleDark">Top Recommendations</div>
                   <div className="resultsGrid">
                     {data.top3.map((r, i) => (
                       <div key={r.restaurant_name} ref={setCardRef(r.restaurant_name)}>
                         <RestaurantCard
                           item={r}
-                          badge={`Top ${i + 1}`}
+                          badge={i < 3 ? `Top ${i + 1}` : undefined}
                           onClick={() => viewVenue(r)}
                         />
                       </div>

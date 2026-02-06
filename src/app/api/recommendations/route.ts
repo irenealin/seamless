@@ -189,9 +189,10 @@ export async function POST(req: Request) {
   const eligibleNames = new Set(eligibleForTop3.map((r) => r.restaurant_name));
   const fallbackTop3 =
     !eligibleForTop3.length && restaurants.length ? restaurants.slice(0, 3) : [];
+  const topRecommendations = eligibleForTop3.length ? eligibleForTop3 : fallbackTop3;
 
   return NextResponse.json({
-    top3: (eligibleForTop3.length ? eligibleForTop3 : fallbackTop3).slice(0, 3),
+    top3: topRecommendations,
     others: restaurants
       .filter((r) => !eligibleNames.has(r.restaurant_name))
       .filter((r) => !fallbackTop3.some((f) => f.restaurant_name === r.restaurant_name))

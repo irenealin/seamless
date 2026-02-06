@@ -312,6 +312,14 @@ export default function DiscoverPage() {
         else delete next.areaLabel;
         return next;
       }
+      if (field === "budgetTotal" && budgetMode === "perHead") {
+        const perHead = parseNumber(nextValue);
+        const headcount = parseNumber(prev.headcount ?? "");
+        if (perHead != null && headcount != null) {
+          next.budgetTotal = String(Math.round(perHead * headcount));
+          return next;
+        }
+      }
       if (!nextValue) {
         delete next[field as keyof Requirements];
         return next;
@@ -319,8 +327,18 @@ export default function DiscoverPage() {
       next[field as keyof Requirements] = nextValue as Requirements[keyof Requirements];
       return next;
     });
+    if (field === "budgetTotal" && budgetMode === "perHead") {
+      setBudgetMode("total");
+    }
     setRefreshTick((prev) => prev + 1);
     setEditingField(null);
+  }
+
+  function parseNumber(value: string | null | undefined) {
+    if (!value) return null;
+    const cleaned = value.replace(/[^0-9.]/g, "");
+    const num = Number(cleaned);
+    return Number.isFinite(num) ? num : null;
   }
 
   function getPhotos(item: RestaurantResult) {
@@ -537,7 +555,21 @@ export default function DiscoverPage() {
           return merged;
         });
         if (mentionsPerPerson) {
-          setBudgetMode("perHead");
+          if (json.requirements?.budgetTotal) {
+            const perHead = parseNumber(json.requirements.budgetTotal);
+            const headcount = parseNumber(requirements.headcount ?? "");
+            if (perHead != null && headcount != null) {
+              setRequirements((prev) => ({
+                ...prev,
+                budgetTotal: String(Math.round(perHead * headcount)),
+              }));
+              setBudgetMode("total");
+            } else {
+              setBudgetMode("perHead");
+            }
+          } else {
+            setBudgetMode("perHead");
+          }
         } else if (mentionsBudget || json.requirements?.budgetTotal) {
           setBudgetMode("total");
         }
@@ -897,9 +929,15 @@ export default function DiscoverPage() {
                         <div className="snapshotStripValue">
                           {row.value
                             ? row.key === "budgetTotal"
-                              ? `$${row.value} ${
-                                  budgetMode === "perHead" ? "per person" : "total"
-                                }`
+                              ? (() => {
+                                  const budget = parseNumber(row.value);
+                                  const headcount = parseNumber(requirements.headcount ?? "");
+                                  if (budget == null) return `$${row.value} total`;
+                                  if (budgetMode === "perHead" && headcount != null) {
+                                    return `$${Math.round(budget * headcount)} total`;
+                                  }
+                                  return `$${budget} total`;
+                                })()
                               : row.value
                             : "Not specified"}
                         </div>

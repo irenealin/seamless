@@ -371,23 +371,33 @@ export default function DiscoverPage() {
     const maxCorkageFee = requirements.maxCorkageFee ?? "";
 
     const parts: string[] = [];
-    if (eventType) parts.push(`The event is a ${eventType}`);
-    if (headcount) parts.push(`for about ${headcount} guests`);
-    if (dateNeeded || timeNeeded) {
-      const dateText = dateNeeded ? `on ${dateNeeded}` : "";
-      const timeText = timeNeeded ? `at ${timeNeeded}` : "";
-      parts.push(`scheduled ${[dateText, timeText].filter(Boolean).join(" ")}`);
-    }
-    if (privacyLevel) parts.push(`We prefer a ${privacyLevel.toLowerCase()} setup`);
-    if (noiseLevel) parts.push(`with a ${noiseLevel.toLowerCase()} noise level`);
-    if (vibe) parts.push(`and a ${vibe.toLowerCase()} vibe`);
-    if (needsAV) parts.push("A/V support would be needed");
-    if (budgetTotal) parts.push(`Our budget is up to $${budgetTotal}`);
-    if (maxCakeFee) parts.push(`and we'd like the cake fee to be no more than $${maxCakeFee}`);
-    if (maxCorkageFee) parts.push(`with corkage capped at $${maxCorkageFee}`);
+    const dateText = dateNeeded ? `on ${dateNeeded}` : "";
+    const timeText = timeNeeded ? `at ${timeNeeded}` : "";
+    const dateTime = [dateText, timeText].filter(Boolean).join(" ");
 
-    const sentence = parts.join(", ") + (parts.length ? "." : "");
-    return sentence || "We don’t have any specific requirements yet.";
+    if (eventType) parts.push(`a ${eventType}`);
+    if (headcount) parts.push(`for about ${headcount} guests`);
+    if (dateTime) parts.push(`scheduled ${dateTime}`);
+
+    const preferences: string[] = [];
+    if (privacyLevel) preferences.push(`${privacyLevel.toLowerCase()} setup`);
+    if (noiseLevel) preferences.push(`${noiseLevel.toLowerCase()} noise level`);
+    // Intentionally omit vibe from outbound email.
+
+    const extras: string[] = [];
+    if (needsAV) extras.push("A/V support");
+    if (maxCakeFee) extras.push(`a cake fee no more than $${maxCakeFee}`);
+    if (maxCorkageFee) extras.push(`corkage capped at $${maxCorkageFee}`);
+
+    const intro = parts.length
+      ? `We're planning ${parts.join(" ")}.`
+      : "We're planning a private dining event.";
+    const prefLine = preferences.length
+      ? `We prefer a ${preferences.join(", ")}.`
+      : "";
+    const extraLine = extras.length ? `We'd also like ${extras.join(", ")}.` : "";
+
+    return [intro, prefLine, extraLine].filter(Boolean).join(" ");
   }
 
   function requestQuoteDraft(item: RestaurantResult) {
@@ -396,16 +406,6 @@ export default function DiscoverPage() {
       return;
     }
     const contactValue = item.contact_email.trim();
-    const looksLikeEmail = /.+@.+\..+/.test(contactValue);
-    if (!looksLikeEmail) {
-      const href = contactValue.startsWith("http")
-        ? contactValue
-        : `https://${contactValue}`;
-      void trackCtaEvent("request_quote", item.restaurant_name ?? null).finally(() => {
-        window.open(href, "_blank", "noopener,noreferrer");
-      });
-      return;
-    }
 
     const lastUserMessage =
       [...messages].reverse().find((m) => m.role === "user")?.content?.trim() ?? "";
@@ -418,22 +418,12 @@ export default function DiscoverPage() {
     const headcount = requirements.headcount ?? "";
     const dateNeeded = requirements.dateNeeded ? stripYear(requirements.dateNeeded) : "";
     const timeNeeded = requirements.timeNeeded ?? "";
-    const dateLabel = dateNeeded || "TBD";
+    const dateLabel = dateNeeded || "[DATE]";
+    const timeLabel = timeNeeded || "[TIME]";
     const dateTimeLine =
-      dateNeeded && timeNeeded
-        ? `${dateNeeded} at ${timeNeeded}`
-        : dateNeeded || timeNeeded || "TBD";
-    const areaLabel = requirements.areaLabel ?? "";
-    const radiusMiles = requirements.radiusMiles ?? "";
-    const locationLine = areaLabel
-      ? ` in ${areaLabel}${radiusMiles ? ` (within ${radiusMiles} miles)` : ""}`
-      : "";
+      dateNeeded && timeNeeded ? `${dateNeeded} at ${timeNeeded}` : `${dateLabel} at ${timeLabel}`;
     const subject = `Private Dining at ${item.restaurant_name} - ${dateLabel}`;
-    const body = `Hi ${item.restaurant_name} Team,\n\nI'm reaching out to inquire about booking a private dining room on ${dateLabel}.\n\nWe are looking for a private, enclosed space${
-      headcount ? ` with capacity for ${headcount} guests` : ""
-    } at one long table (Chef’s Table style)${locationLine}.\n\nTiming: ${dateTimeLine}.\n\n${buildQuoteBody()}${
-      lastUserMessage ? `\n\nAlso, ${normalizeSentence(lastUserMessage)}` : ""
-    }\n\nPlease let me know if this date is available and if the space can accommodate our group. Thank you!\n`;
+    const body = `Hi ${item.restaurant_name} Team,\n\nI'm reaching out to inquire about booking a private dining room at ${item.restaurant_name} on ${dateLabel}. ${buildQuoteBody()} Timing: ${dateTimeLine}. Please let me know if this date is available and if the space can accommodate our group. Thank you!\n`;
 
     const mailto = `mailto:${encodeURIComponent(
       contactValue
@@ -564,7 +554,21 @@ export default function DiscoverPage() {
     centerOverride?: { lat: number; lng: number },
     opts?: { isDefault?: boolean }
   ) {
-    const activeCenter = centerOverride ?? center;
+    let activeCenter = centerOverride ?? center;
+    if (!activeCenter && requirements.areaLabel) {
+      try {
+        await loadGoogleMaps(["maps"]);
+        const geocoder = new google.maps.Geocoder();
+        const { results } = await geocoder.geocode({ address: requirements.areaLabel });
+        const loc = results?.[0]?.geometry?.location;
+        if (loc) {
+          activeCenter = { lat: loc.lat(), lng: loc.lng() };
+          setCenter(activeCenter);
+        }
+      } catch (err) {
+        console.error("Failed to geocode area label for recommendations:", err);
+      }
+    }
     if (!activeCenter) {
       alert("Please select an area from the dropdown suggestions first.");
       return;

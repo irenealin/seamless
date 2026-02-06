@@ -47,7 +47,7 @@ function mergeRequirements(current: Requirements | undefined, incoming: Requirem
   for (const [key, value] of Object.entries(incoming) as [keyof Requirements, unknown][]) {
     if (value === undefined) continue;
     if (typeof value === "string" && value.trim() === "") continue;
-    next[key] = value as Requirements[keyof Requirements];
+    (next as Record<string, unknown>)[key] = value;
   }
 
   return next;

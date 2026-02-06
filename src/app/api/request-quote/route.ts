@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import nodemailer from "nodemailer";
 
 const InputSchema = z.object({
   restaurant_name: z.string().min(1),

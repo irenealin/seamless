@@ -21,6 +21,9 @@ export default function Book() { // Defines the email capture page component.
         const message = payload?.error ?? "Unable to save your email."; // Chooses a helpful error message.
         throw new Error(message); // Throws to trigger the catch branch.
       } // Ends the non-OK response guard.
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("seamless_booker_email", email.trim().toLowerCase());
+      }
       router.push("/discover"); // Sends the user to the booking page after success.
     } catch (error) { // Handles network or API errors.
       const message = error instanceof Error ? error.message : "Something went wrong."; // Normalizes the error message.

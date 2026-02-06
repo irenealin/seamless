@@ -23,12 +23,10 @@ html, body{
   padding:0;
   margin:0;
   color: var(--text);
-  background:
-    radial-gradient(900px 480px at 15% -5%, rgba(201, 163, 106, 0.10), transparent 60%),
-    radial-gradient(800px 480px at 85% 0%, rgba(255, 255, 255, 0.03), transparent 55%),
-    var(--bg);
+  background: var(--bg);
   font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, "Times New Roman", serif;
   letter-spacing: 0.1px;
+  overscroll-behavior: auto;
 }
 
 body:has(.landingPage){
@@ -56,7 +54,7 @@ body:has(.discoverPage) .header .btn{
 }
 body:has(.discoverPage) .container{
   max-width: 1480px;
-  padding: 16px 10px;
+  padding: 44px 10px 16px;
 }
 
 .discoverPage{
@@ -64,28 +62,6 @@ body:has(.discoverPage) .container{
   position: relative;
   isolation: isolate;
   --landing-gold: #D4AF37;
-}
-.discoverPage::before,
-.discoverPage::after{
-  content: "";
-  position: absolute;
-  inset: auto;
-  width: 520px;
-  height: 520px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(212,175,55,0.12) 0%, transparent 65%);
-  filter: blur(10px);
-  pointer-events: none;
-  z-index: 0;
-}
-.discoverPage::before{
-  top: -180px;
-  right: -140px;
-}
-.discoverPage::after{
-  bottom: -220px;
-  left: -120px;
-  background: radial-gradient(circle, rgba(183,110,121,0.12) 0%, transparent 70%);
 }
 
 .discoverPage > *{
@@ -104,7 +80,7 @@ a{ color: inherit; text-decoration: none; }
 .container{
   max-width: 1280px;
   margin: 0 auto;
-  padding: 24px;
+  padding: 44px 24px 24px;
 }
 
 .header{
@@ -112,6 +88,25 @@ a{ color: inherit; text-decoration: none; }
   align-items:center;
   justify-content:space-between;
   gap: 16px;
+  padding: 1px 0;
+  position: fixed;
+  top: 0;
+  z-index: 40;
+  background: var(--bg);
+  width: 100%;
+  left: 0;
+}
+
+body:has(.discoverPage) .header{
+  background: #F6F3EE;
+}
+
+.landingBrand{
+  margin-left: 12px;
+}
+
+.nav{
+  margin-right: 12px;
 }
 
 .brand{
@@ -140,15 +135,14 @@ a{ color: inherit; text-decoration: none; }
 
 .btn{
   border-radius: 14px;
-  padding: 10px 14px;
-  font-weight: 700;
-  font-size: 14px;
+  padding: 6px 10px;
+  font-weight: 600;
+  font-size: 12px;
   border: 1px solid var(--border);
   background: rgba(22,20,17,0.85);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
   cursor:pointer;
 }
-.btn:hover{ box-shadow: var(--shadow2); }
+.btn:hover{ }
 
 .btnPrimary{
   background: var(--accent);
@@ -172,7 +166,6 @@ a{ color: inherit; text-decoration: none; }
   border: 1px solid var(--border);
   background: var(--card);
   backdrop-filter: blur(12px);
-  box-shadow: var(--shadow);
 }
 
 .cardInner{ padding: 18px; }
@@ -192,8 +185,10 @@ a{ color: inherit; text-decoration: none; }
 }
 @media (min-width: 1100px){
   .discoverGrid{
+    --left-panel-width: min(420px, 32vw);
     grid-template-columns: 3fr 7fr 0.25fr;
     align-items:start;
+    padding-left: 0;
   }
 }
 .mapColumn{
@@ -214,21 +209,189 @@ a{ color: inherit; text-decoration: none; }
   .stickyColumn{
     position: sticky;
     top: 16px;
+    width: auto;
+    height: auto;
+    overflow: visible;
   }
 }
 
 @media (min-width: 1100px){
   .conciergePanel{
-    max-height: calc(100vh - 140px);
-    overflow-y: auto;
-    padding-right: 6px;
+    max-height: none;
+    overflow-y: visible;
   }
 }
 
 .snapshotRow.isUpdated{
-  box-shadow: 0 0 0 2px rgba(201, 163, 106, 0.4);
-  transition: box-shadow 0.3s ease;
+  transition: none;
 }
+
+/* =========================
+   Live Event Snapshot (polished)
+   ========================= */
+
+.snapshotRow.isUpdated{
+  transition: none;
+}
+
+.snapshotStrip{
+  position: static;
+}
+
+.snapshotStrip .cardInner{
+  padding: 10px 12px;
+}
+
+.snapshotStripHeader{
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  opacity: 0.9;
+  margin-bottom: 8px;
+}
+
+.snapshotStripBody{
+  display: grid;
+  gap: 10px;
+}
+
+/* IMPORTANT: replaces your flex-wrap row with a tidy grid */
+.snapshotStripFields{
+  display: grid;
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  gap: 8px;
+  align-items: stretch;
+}
+@media (max-width: 1200px){
+  .snapshotStripFields{
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+  }
+}
+@media (max-width: 800px){
+  .snapshotStripFields{
+    grid-template-columns: 1fr;
+  }
+}
+
+.snapshotStripItem{
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+
+  min-height: 38px;
+  padding: 4px 8px;
+
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.035);
+  position: relative;
+}
+
+/* label + value alignment */
+.snapshotStripContent{
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.snapshotStripLabel{
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+.snapshotStripValue{
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text);
+  opacity: 0.92;
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* input inside chip (if you use it) */
+.snapshotStripInput{
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  border-radius: 999px;
+  flex: 1;
+}
+
+.snapshotStripInputRow{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.snapshotStripCurrency{
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+
+/* toggle pills (Total / Per person) */
+.snapshotStripToggle{
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 10px;
+  margin-top: 0;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 999px;
+  padding: 1px;
+  position: relative;
+  z-index: 2;
+}
+
+.snapshotToggleBtn{
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 999px;
+  cursor: pointer;
+  opacity: 0.7;
+  pointer-events: auto;
+}
+
+.snapshotToggleBtn.isActive{
+  background: rgba(255,255,255,0.12);
+  color: var(--text);
+  opacity: 1;
+}
+
+.snapshotStripSpacer{
+  width: 1px;
+}
+
+/* edit icon button inside chip */
+.snapshotStripEdit{
+  height: 26px;
+  width: 26px;
+  border-radius: 999px;
+
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  display: grid;
+  place-items: center;
+
+  padding: 0;
+  margin-left: 8px;
+  min-width: 26px; /* overrides any previous min-width */
+}
+
+.snapshotStripEdit:hover{
+  background: rgba(255,255,255,0.12);
+}
+
 
 .conciergePanel .cardInner{
   padding: 14px;
@@ -240,6 +403,9 @@ a{ color: inherit; text-decoration: none; }
   padding: 10px 10px;
   border-radius: 12px;
 }
+
+
+
 
 .h1{
   font-size: 42px;
@@ -253,7 +419,7 @@ a{ color: inherit; text-decoration: none; }
 }
 
 .section{
-  margin-top: 26px;
+  margin-top: 12px;
 }
 
 .formGrid{
@@ -324,7 +490,6 @@ a{ color: inherit; text-decoration: none; }
 }
 .input:focus{
   border-color: rgba(201, 163, 106, 0.55);
-  box-shadow: 0 0 0 4px rgba(201, 163, 106, 0.16);
 }
 
 .row{
@@ -335,9 +500,9 @@ a{ color: inherit; text-decoration: none; }
 }
 
 .badge{
-  font-size: 12px;
-  font-weight: 800;
-  padding: 6px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 8px;
   border-radius: 999px;
   background: var(--accentSoft);
   border: 1px solid rgba(201, 163, 106, 0.22);
@@ -351,8 +516,8 @@ a{ color: inherit; text-decoration: none; }
   width: fit-content;
   height: fit-content;
 
-  padding: 4px 8px;
-  border-radius: 8px;
+  padding: 3px 6px;
+  border-radius: 6px;
   background: rgba(201, 163, 106, 0.22);
 
   line-height: 1;
@@ -373,10 +538,12 @@ a{ color: inherit; text-decoration: none; }
   border: 1px solid var(--border);
   border-radius: var(--radius2);
   overflow:hidden;
-  box-shadow: 0 10px 25px rgba(15,23,42,0.07);
   cursor:pointer;
+  display: grid;
+  grid-template-rows: 200px 1fr;
+  height: 100%;
 }
-.resultCard:hover{ box-shadow: var(--shadow2); }
+.resultCard:hover{ }
 
 .heroImg{
   height: 200px;
@@ -395,8 +562,8 @@ a{ color: inherit; text-decoration: none; }
 .title{ font-weight: 800; font-size: 16px; margin: 0; }
 .sub{ margin-top: 4px; }
 .sectionTitle{
-  font-size: 20px;
-  font-weight: 800;
+  font-size: 16px;
+  font-weight: 700;
   color: var(--text);
   letter-spacing: 0.2px;
 }
@@ -423,7 +590,6 @@ a{ color: inherit; text-decoration: none; }
   background: var(--cardSolid);
   border: 1px solid var(--border);
   border-radius: var(--radius2);
-  box-shadow: var(--shadow);
   max-height: 90vh;
   overflow: auto;
 }
@@ -618,7 +784,6 @@ a{ color: inherit; text-decoration: none; }
   object-fit: contain;
   border-radius: 16px;
   border: 1px solid var(--border);
-  box-shadow: var(--shadow);
 }
 .lightboxControls{
   position: absolute;
@@ -678,25 +843,7 @@ a{ color: inherit; text-decoration: none; }
 }
 .landingPage::before,
 .landingPage::after{
-  content: "";
-  position: absolute;
-  inset: auto;
-  width: 520px;
-  height: 520px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(212,175,55,0.12) 0%, transparent 65%);
-  filter: blur(10px);
-  pointer-events: none;
-  z-index: 0;
-}
-.landingPage::before{
-  top: -180px;
-  right: -140px;
-}
-.landingPage::after{
-  bottom: -220px;
-  left: -120px;
-  background: radial-gradient(circle, rgba(183,110,121,0.12) 0%, transparent 70%);
+  content: none;
 }
 
 .landingHeader{
@@ -716,31 +863,31 @@ a{ color: inherit; text-decoration: none; }
 }
 
 .landingLogoMark{
-  width: 64px;
-  height: 64px;
-  border-radius: 20px;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
   border: none;
   display: grid;
   place-items: center;
   color: var(--landing-gold);
   background: rgba(255,255,255,0.8);
 }
-.landingLogoMark svg{ width: 44px; height: 44px; }
+.landingLogoMark svg{ width: 30px; height: 30px; }
 
 .landingBrandTitle{
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
 }
 .landingBrandSub{
-  font-size: 12px;
+  font-size: 10px;
   color: rgba(45, 45, 45, 0.7);
-  margin-top: 4px;
+  margin-top: 2px;
 }
 .landingHeaderSpacer{
-  width: 64px;
-  height: 64px;
+  width: 44px;
+  height: 44px;
 }
 
 .landingHero{
@@ -791,13 +938,45 @@ a{ color: inherit; text-decoration: none; }
   margin-bottom: 20px;
   justify-content: center;
 }
+.landingForm{ /* Styles the email capture form layout. */
+  display: grid; /* Uses a grid layout to stack form elements. */
+  gap: 14px; /* Adds spacing between form controls. */
+  max-width: 420px; /* Limits the form width for readability. */
+  margin: 0 auto; /* Centers the form within the hero copy. */
+} /* Ends the landing form styles. */
+.landingInput{ /* Styles the landing page email input. */
+  width: 100%; /* Makes the input fill the form width. */
+  padding: 14px 18px; /* Adds comfortable interior spacing. */
+  border-radius: 999px; /* Matches the rounded button shape. */
+  border: 1px solid rgba(10,10,10,0.18); /* Adds a subtle border for contrast. */
+  background: #ffffff; /* Ensures a clean input background. */
+  color: #0A0A0A; /* Sets readable text color on the light background. */
+  font-size: 16px; /* Keeps the input text legible. */
+  outline: none; /* Removes the default focus outline. */
+} /* Ends the landing input styles. */
+.landingInput:focus{ /* Styles the focus state for the landing input. */
+  border-color: rgba(212,175,55,0.7); /* Highlights the border on focus. */
+} /* Ends the landing input focus styles. */
+.landingHelper{ /* Styles the helper/label text above the input. */
+  font-size: 13px; /* Sets a smaller label size. */
+  color: rgba(45,45,45,0.7); /* Uses a muted label color. */
+  text-transform: uppercase; /* Matches the landing page typography style. */
+  letter-spacing: 0.18em; /* Adds spacing to the label letters. */
+  font-weight: 600; /* Emphasizes the label text slightly. */
+  margin: 0; /* Removes default margin for tighter layout. */
+} /* Ends the landing helper styles. */
+.landingError{ /* Styles the error message for the email form. */
+  font-size: 13px; /* Keeps the error text compact. */
+  color: #B3261E; /* Uses a strong red for error visibility. */
+  margin: 0; /* Removes default margin for alignment. */
+} /* Ends the landing error styles. */
 
 .landingBtn{
   border-radius: 999px;
   padding: clamp(12px, 1.6vw, 16px) clamp(22px, 2.2vw, 36px);
   font-size: clamp(14px, 1.4vw, 18px);
   font-weight: 600;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s ease;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -806,11 +985,11 @@ a{ color: inherit; text-decoration: none; }
 .landingBtnPrimary{
   background: linear-gradient(90deg, #D4AF37 0%, #F4E4C1 100%);
   color: var(--landing-black);
-  box-shadow: 0 10px 26px rgba(212,175,55,0.25);
+  border: none;     
+  box-shadow: none; 
 }
 .landingBtnPrimary:hover{
   transform: translateY(-2px) scale(1.01);
-  box-shadow: 0 14px 32px rgba(212,175,55,0.35);
 }
 .landingMinimalGrid{
   padding: 48px 24px 80px;
@@ -852,7 +1031,6 @@ a{ color: inherit; text-decoration: none; }
   padding: 22px 24px;
   border-radius: 18px;
   background: #ffffff;
-  box-shadow: 0 16px 36px rgba(10,10,10,0.06);
   opacity: 0;
   transform: translateY(24px);
   animation: landingFadeUp 0.7s ease forwards;
@@ -901,4 +1079,10 @@ body:has(.landingPage) {
 @media (max-width: 768px){
   .landingHeroCopy h1{ font-size: 40px; }
   .landingHero{ padding-top: 48px; min-height: calc(100vh - 80px); }
+}
+.conciergeScroll{
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+  cursor: auto;
 }

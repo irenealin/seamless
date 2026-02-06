@@ -6,10 +6,12 @@ import { PlaceSearch } from "@/components/PlaceSearch";
 import { GoogleMapPanel } from "@/components/GoogleMapPanel";
 import { RestaurantCard } from "@/components/RestaurantCard";
 import type { Requirements } from "@/lib/intakeTypes";
+import { loadGoogleMaps } from "@/lib/googleMaps";
+import { supabase } from "@/lib/supabaseClient";
 
 const DEFAULT_CENTER = { lat: 37.4419, lng: -122.143 };
 const DEFAULT_AREA_LABEL = "Palo Alto, CA";
-const REQUIRED_FIELDS = ["areaLabel", "headcount", "budgetTotal", "dateNeeded"] as const;
+const REQUIRED_FIELDS = ["areaLabel", "headcount", "budgetTotal"] as const;
 const MISSING_LABELS: Record<string, string> = {
   areaLabel: "location",
   headcount: "headcount",
@@ -112,6 +114,27 @@ function useDebouncedEffect(effect: () => void, deps: unknown[], delayMs: number
   }, deps); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
+function inferAreaLabel(message: string) {
+  const text = message.toLowerCase();
+  const rules: Array<{ pattern: RegExp; label: string }> = [
+    { pattern: /\b(sf|san\s+francisco|s\.f\.)\b/i, label: "San Francisco, CA" },
+    { pattern: /\b(nyc|new\s+york|new\s+york\s+city)\b/i, label: "New York, NY" },
+    { pattern: /\b(la|l\.a\.|los\s+angeles)\b/i, label: "Los Angeles, CA" },
+    { pattern: /\b(chicago)\b/i, label: "Chicago, IL" },
+    { pattern: /\b(boston)\b/i, label: "Boston, MA" },
+    { pattern: /\b(seattle)\b/i, label: "Seattle, WA" },
+    { pattern: /\b(miami)\b/i, label: "Miami, FL" },
+    { pattern: /\b(austin)\b/i, label: "Austin, TX" },
+    { pattern: /\b(denver)\b/i, label: "Denver, CO" },
+    { pattern: /\b(dallas)\b/i, label: "Dallas, TX" },
+    { pattern: /\b(houston)\b/i, label: "Houston, TX" },
+  ];
+  for (const rule of rules) {
+    if (rule.pattern.test(text)) return rule.label;
+  }
+  return null;
+}
+
 export default function DiscoverPage() {
   const searchParams = useSearchParams();
   const isExplore = searchParams.get("mode") === "explore";
@@ -125,7 +148,7 @@ export default function DiscoverPage() {
     {
       role: "assistant",
       content:
-        "Tell me about your event — location, headcount, budget, date, time, and desired vibe. I’ll ask one follow-up if needed.",
+        "Welcome to Seamless! Happy to help you find your next private dining room. To get started, tell me about your event — location, headcount, budget, and desired vibe. I’ll ask follow-ups if needed.",
     },
   ]);
   const [draft, setDraft] = useState("");
@@ -136,6 +159,9 @@ export default function DiscoverPage() {
   const draftRef = useRef<HTMLTextAreaElement | null>(null);
   const lastUpdatedRef = useRef<Requirements>({});
   const [lastUpdatedField, setLastUpdatedField] = useState<string | null>(null);
+  const [editingField, setEditingField] = useState<SnapshotField["key"] | null>(null);
+  const [editingValue, setEditingValue] = useState("");
+  const [budgetMode, setBudgetMode] = useState<"total" | "perHead">("total");
 
   // API response state
   const [loading, setLoading] = useState(false);
@@ -146,7 +172,10 @@ export default function DiscoverPage() {
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [showDefaultHeader, setShowDefaultHeader] = useState(true);
   const [roomIndexes, setRoomIndexes] = useState<Record<string, number>>({});
+  const [refreshTick, setRefreshTick] = useState(0);
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const lastManualAreaLabelRef = useRef<string | null>(null);
+  const lastGeocodedAreaLabelRef = useRef<string | null>(null);
 
   function setCardRef(name: string) {
     return (el: HTMLDivElement | null) => {
@@ -212,6 +241,38 @@ export default function DiscoverPage() {
   }, [isExplore, requirements.areaLabel]);
 
   useEffect(() => {
+    const label = requirements.areaLabel?.trim();
+    if (!label) return;
+
+    if (label === lastManualAreaLabelRef.current) {
+      lastGeocodedAreaLabelRef.current = label;
+      return;
+    }
+
+    if (label === lastGeocodedAreaLabelRef.current && center) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        await loadGoogleMaps(["maps"]);
+        const geocoder = new google.maps.Geocoder();
+        const { results } = await geocoder.geocode({ address: label });
+        const loc = results?.[0]?.geometry?.location;
+        if (!loc || cancelled) return;
+        setCenter({ lat: loc.lat(), lng: loc.lng() });
+        lastGeocodedAreaLabelRef.current = label;
+      } catch (err) {
+        console.error("Failed to geocode area label:", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [requirements.areaLabel, center]);
+
+  useEffect(() => {
     const missingNext = REQUIRED_FIELDS.filter((field) => {
       const value = requirements[field];
       return !value || (typeof value === "string" && value.trim() === "");
@@ -237,9 +298,55 @@ export default function DiscoverPage() {
     transcriptEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, isSending]);
 
-  function insertPrompt(text: string) {
-    setDraft((prev) => (prev ? `${prev}\n${text}` : text));
-    requestAnimationFrame(() => draftRef.current?.focus());
+  function startInlineEdit(field: SnapshotField["key"], value: string) {
+    setEditingField(field);
+    setEditingValue(value);
+  }
+
+  function commitInlineEdit(field: SnapshotField["key"], value: string) {
+    const nextValue = value.trim();
+    setRequirements((prev) => {
+      const next = { ...prev };
+      if (field === "location") {
+        if (nextValue) next.areaLabel = nextValue;
+        else delete next.areaLabel;
+        return next;
+      }
+      if (field === "budgetTotal" && budgetMode === "perHead") {
+        const perHead = parseNumber(nextValue);
+        const headcount = parseNumber(prev.headcount ?? "");
+        if (perHead != null && headcount != null) {
+          next.budgetTotal = String(Math.round(perHead * headcount));
+          return next;
+        }
+      }
+      if (!nextValue) {
+        delete next[field as keyof Requirements];
+        return next;
+      }
+      next[field as keyof Requirements] = nextValue as Requirements[keyof Requirements];
+      return next;
+    });
+    if (field === "budgetTotal" && budgetMode === "perHead") {
+      setBudgetMode("total");
+    }
+    setRefreshTick((prev) => prev + 1);
+    setEditingField(null);
+  }
+
+  function parseNumber(value: string | null | undefined) {
+    if (!value) return null;
+    const match = value.match(/(\d+(?:\.\d+)?)/);
+    if (!match) return null;
+    const num = Number(match[1]);
+    return Number.isFinite(num) ? num : null;
+  }
+
+  function extractPerPersonAmount(text: string) {
+    const match = text.match(/(\d+(?:\.\d+)?)\s*(?:per\s*(person|head|guest)|pp)\b/i);
+    if (!match) return null;
+    const num = Number(match[1]);
+    return Number.isFinite(num) ? num : null;
   }
 
   function getPhotos(item: RestaurantResult) {
@@ -313,23 +420,33 @@ export default function DiscoverPage() {
     const maxCorkageFee = requirements.maxCorkageFee ?? "";
 
     const parts: string[] = [];
-    if (eventType) parts.push(`The event is a ${eventType}`);
-    if (headcount) parts.push(`for about ${headcount} guests`);
-    if (dateNeeded || timeNeeded) {
-      const dateText = dateNeeded ? `on ${dateNeeded}` : "";
-      const timeText = timeNeeded ? `at ${timeNeeded}` : "";
-      parts.push(`scheduled ${[dateText, timeText].filter(Boolean).join(" ")}`);
-    }
-    if (privacyLevel) parts.push(`We prefer a ${privacyLevel.toLowerCase()} setup`);
-    if (noiseLevel) parts.push(`with a ${noiseLevel.toLowerCase()} noise level`);
-    if (vibe) parts.push(`and a ${vibe.toLowerCase()} vibe`);
-    if (needsAV) parts.push("A/V support would be needed");
-    if (budgetTotal) parts.push(`Our budget is up to $${budgetTotal}`);
-    if (maxCakeFee) parts.push(`and we'd like the cake fee to be no more than $${maxCakeFee}`);
-    if (maxCorkageFee) parts.push(`with corkage capped at $${maxCorkageFee}`);
+    const dateText = dateNeeded ? `on ${dateNeeded}` : "";
+    const timeText = timeNeeded ? `at ${timeNeeded}` : "";
+    const dateTime = [dateText, timeText].filter(Boolean).join(" ");
 
-    const sentence = parts.join(", ") + (parts.length ? "." : "");
-    return sentence || "We don’t have any specific requirements yet.";
+    if (eventType) parts.push(`a ${eventType}`);
+    if (headcount) parts.push(`for about ${headcount} guests`);
+    if (dateTime) parts.push(`scheduled ${dateTime}`);
+
+    const preferences: string[] = [];
+    if (privacyLevel) preferences.push(`${privacyLevel.toLowerCase()} setup`);
+    if (noiseLevel) preferences.push(`${noiseLevel.toLowerCase()} noise level`);
+    // Intentionally omit vibe from outbound email.
+
+    const extras: string[] = [];
+    if (needsAV) extras.push("A/V support");
+    if (maxCakeFee) extras.push(`a cake fee no more than $${maxCakeFee}`);
+    if (maxCorkageFee) extras.push(`corkage capped at $${maxCorkageFee}`);
+
+    const intro = parts.length
+      ? `We're planning ${parts.join(" ")}.`
+      : "We're planning a private dining event.";
+    const prefLine = preferences.length
+      ? `We prefer a ${preferences.join(", ")}.`
+      : "";
+    const extraLine = extras.length ? `We'd also like ${extras.join(", ")}.` : "";
+
+    return [intro, prefLine, extraLine].filter(Boolean).join(" ");
   }
 
   function requestQuoteDraft(item: RestaurantResult) {
@@ -337,6 +454,7 @@ export default function DiscoverPage() {
       alert("No contact email on file for this restaurant.");
       return;
     }
+    const contactValue = item.contact_email.trim();
 
     const lastUserMessage =
       [...messages].reverse().find((m) => m.role === "user")?.content?.trim() ?? "";
@@ -349,28 +467,60 @@ export default function DiscoverPage() {
     const headcount = requirements.headcount ?? "";
     const dateNeeded = requirements.dateNeeded ? stripYear(requirements.dateNeeded) : "";
     const timeNeeded = requirements.timeNeeded ?? "";
-    const dateLabel = dateNeeded || "TBD";
+    const dateLabel = dateNeeded || "[DATE]";
+    const timeLabel = timeNeeded || "[TIME]";
     const dateTimeLine =
-      dateNeeded && timeNeeded
-        ? `${dateNeeded} at ${timeNeeded}`
-        : dateNeeded || timeNeeded || "TBD";
-    const areaLabel = requirements.areaLabel ?? "";
-    const radiusMiles = requirements.radiusMiles ?? "";
-    const locationLine = areaLabel
-      ? ` in ${areaLabel}${radiusMiles ? ` (within ${radiusMiles} miles)` : ""}`
-      : "";
+      dateNeeded && timeNeeded ? `${dateNeeded} at ${timeNeeded}` : `${dateLabel} at ${timeLabel}`;
     const subject = `Private Dining at ${item.restaurant_name} - ${dateLabel}`;
-    const body = `Hi ${item.restaurant_name} Team,\n\nI'm reaching out to inquire about booking a private dining room on ${dateLabel}.\n\nWe are looking for a private, enclosed space${
-      headcount ? ` with capacity for ${headcount} guests` : ""
-    } at one long table (Chef’s Table style)${locationLine}.\n\nTiming: ${dateTimeLine}.\n\n${buildQuoteBody()}${
-      lastUserMessage ? `\n\nAlso, ${normalizeSentence(lastUserMessage)}` : ""
-    }\n\nPlease let me know if this date is available and if the space can accommodate our group. Thank you!\n`;
+    const body = `Hi ${item.restaurant_name} Team,\n\nI'm reaching out to inquire about booking a private dining room at ${item.restaurant_name} on ${dateLabel}. ${buildQuoteBody()} Timing: ${dateTimeLine}. Please let me know if this date is available and if the space can accommodate our group. Thank you!\n`;
 
     const mailto = `mailto:${encodeURIComponent(
-      item.contact_email
+      contactValue
     )}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
-    window.location.href = mailto;
+    void trackCtaEvent("request_quote", item.restaurant_name ?? null).finally(() => {
+      window.location.href = mailto;
+    });
+  }
+
+  function viewVenue(item: RestaurantResult) {
+    setSelected(item);
+    void trackCtaEvent("view_venue", item.restaurant_name ?? null);
+  }
+
+  function getSessionId() {
+    if (typeof window === "undefined") return null;
+    const key = "seamless_session_id";
+    let value = window.localStorage.getItem(key);
+    if (!value) {
+      value = crypto.randomUUID();
+      window.localStorage.setItem(key, value);
+    }
+    return value;
+  }
+
+  function getStoredEmail() {
+    if (typeof window === "undefined") return null;
+    const raw = window.localStorage.getItem("seamless_booker_email");
+    if (!raw) return null;
+    const email = raw.trim().toLowerCase();
+    return email || null;
+  }
+
+  async function trackCtaEvent(eventType: "view_venue" | "request_quote", venueId: string | null) {
+    try {
+      const sessionId = getSessionId();
+      const email = getStoredEmail();
+      await supabase.from("cta_events").insert({
+        event_type: eventType,
+        page: "discover",
+        venue_id: venueId,
+        email,
+        session_id: sessionId,
+      });
+    } catch (err) {
+      console.error("CTA event insert failed:", err);
+    }
   }
 
   async function sendMessage() {
@@ -401,8 +551,52 @@ export default function DiscoverPage() {
         ...nextMessages,
         { role: "assistant", content: json.assistantMessage || "Thanks! Let me check that." },
       ]);
-      if (json.requirements) {
-        setRequirements((prev) => ({ ...prev, ...json.requirements }));
+      const inferredArea = inferAreaLabel(text);
+      const lowerText = text.toLowerCase();
+      const mentionsPerPerson =
+        /\bper\s*(person|head|guest|pp)\b/.test(lowerText) || /\bpp\b/.test(lowerText);
+      const mentionsBudget = /\bbudget\b/.test(lowerText) || /\$[0-9]/.test(lowerText);
+      if (json.requirements || inferredArea) {
+        let mergedSnapshot: Requirements | null = null;
+        setRequirements((prev) => {
+          const merged = { ...prev, ...(json.requirements ?? {}) };
+          if (inferredArea) merged.areaLabel = inferredArea;
+          mergedSnapshot = merged;
+          return merged;
+        });
+        if (mentionsPerPerson) {
+          const merged = mergedSnapshot ?? requirements;
+          const perHeadFromText = extractPerPersonAmount(text);
+          if (perHeadFromText != null) {
+            const headcount = parseNumber(merged.headcount ?? "");
+            if (headcount != null) {
+              setRequirements((prev) => ({
+                ...prev,
+                budgetTotal: String(Math.round(perHeadFromText * headcount)),
+              }));
+              setBudgetMode("total");
+            } else {
+              setBudgetMode("perHead");
+            }
+          } else if (json.requirements?.budgetTotal) {
+            const perHead = parseNumber(json.requirements.budgetTotal);
+            const headcount = parseNumber(merged.headcount ?? "");
+            if (perHead != null && headcount != null) {
+              setRequirements((prev) => ({
+                ...prev,
+                budgetTotal: String(Math.round(perHead * headcount)),
+              }));
+              setBudgetMode("total");
+            } else {
+              setBudgetMode("perHead");
+            }
+          } else {
+            setBudgetMode("perHead");
+          }
+        } else if (mentionsBudget || json.requirements?.budgetTotal) {
+          setBudgetMode("total");
+        }
+        setRefreshTick((prev) => prev + 1);
       }
       if (Array.isArray(json.missing)) setMissing(json.missing);
       if (typeof json.isComplete === "boolean") setIsComplete(json.isComplete);
@@ -447,7 +641,21 @@ export default function DiscoverPage() {
     centerOverride?: { lat: number; lng: number },
     opts?: { isDefault?: boolean }
   ) {
-    const activeCenter = centerOverride ?? center;
+    let activeCenter = centerOverride ?? center;
+    if (!activeCenter && requirements.areaLabel) {
+      try {
+        await loadGoogleMaps(["maps"]);
+        const geocoder = new google.maps.Geocoder();
+        const { results } = await geocoder.geocode({ address: requirements.areaLabel });
+        const loc = results?.[0]?.geometry?.location;
+        if (loc) {
+          activeCenter = { lat: loc.lat(), lng: loc.lng() };
+          setCenter(activeCenter);
+        }
+      } catch (err) {
+        console.error("Failed to geocode area label for recommendations:", err);
+      }
+    }
     if (!activeCenter) {
       alert("Please select an area from the dropdown suggestions first.");
       return;
@@ -494,8 +702,23 @@ export default function DiscoverPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-
-    const json = await resp.json();
+    let json: ApiResp | null = null;
+    const contentType = resp.headers.get("content-type") ?? "";
+    const rawText = await resp.text();
+    if (contentType.includes("application/json") && rawText) {
+      try {
+        json = JSON.parse(rawText) as ApiResp;
+      } catch {
+        console.error("Recommendations returned invalid JSON:", rawText.slice(0, 200));
+      }
+    } else if (rawText) {
+      console.error("Recommendations returned non-JSON:", rawText.slice(0, 200));
+    }
+    if (!resp.ok || !json) {
+      console.error("Recommendations request failed:", resp.status, resp.statusText);
+      setLoading(false);
+      return;
+    }
     setData(json);
     setLoading(false);
   }
@@ -509,66 +732,75 @@ export default function DiscoverPage() {
     if (!center) return;
     if (missingRequired.length) return;
     getRecommendations();
-  }, [center?.lat, center?.lng, requirements, missingRequired.length], 450);
+  }, [center?.lat, center?.lng, requirements, missingRequired.length, refreshTick], 450);
 
   return (
     <div className="discoverPage">
       <div className="discoverGrid">
         {/* LEFT: AI Intake Chat */}
         <div className="stickyColumn conciergePanel" style={{ display: "grid", gap: 12 }}>
-          <div className="card">
+          <div className="card conciergeCard">
             <div className="cardInner">
               <div style={{ display: "grid", gap: 4 }}>
-                <div style={{ fontWeight: 900 }}>AI Concierge</div>
+                <div className="sectionTitle">AI Concierge</div>
                 <div className="small">
-                  Describe your event — location, headcount, budget, date, time, and desired vibe.
-                  I’ll ask one follow-up if needed.
+                  Describe your event and I’ll update your live snapshot in real time.
                 </div>
               </div>
 
               <div
                 style={{
-                  marginTop: 12,
-                  display: "grid",
-                  gap: 10,
-                  maxHeight: 260,
-                  overflowY: "auto",
-                  padding: 12,
+                  marginTop: 10,
+                  height: 350,
                   borderRadius: 14,
-                  border: "1px solid var(--border)",
-                  background: "rgba(0,0,0,0.18)",
+                  border: "1px solid transparent",
+                  background: "transparent",
+                  overflow: "hidden",
                 }}
               >
-                {messages.map((msg, idx) => (
-                  <div
-                    key={`${msg.role}-${idx}`}
-                    style={{
-                      display: "flex",
-                      justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
-                    }}
-                  >
+                <div
+                  className="conciergeScroll"
+                  style={{
+                    height: "100%",
+                    overflowY: "auto",
+                    padding: 10,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 10,
+                    justifyContent: "flex-start",
+                  }}
+                >
+                  {messages.map((msg, idx) => (
                     <div
+                      key={`${msg.role}-${idx}`}
                       style={{
-                        maxWidth: "85%",
-                        padding: "10px 12px",
-                        borderRadius: 14,
-                        border: "1px solid var(--border)",
-                        background:
-                          msg.role === "user"
-                            ? "rgba(201, 163, 106, 0.18)"
-                            : "rgba(255, 255, 255, 0.06)",
+                        display: "flex",
+                        justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
                       }}
                     >
-                      <div className="small" style={{ whiteSpace: "pre-wrap" }}>
-                        {msg.content}
+                      <div
+                        style={{
+                          maxWidth: "85%",
+                          padding: "10px 12px",
+                          borderRadius: 14,
+                          border: "1px solid var(--border)",
+                          background:
+                            msg.role === "user"
+                              ? "rgba(201, 163, 106, 0.18)"
+                              : "rgba(255, 255, 255, 0.06)",
+                        }}
+                      >
+                        <div className="small" style={{ whiteSpace: "pre-wrap" }}>
+                          {msg.content}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-                <div ref={transcriptEndRef} />
+                  ))}
+                  <div ref={transcriptEndRef} />
+                </div>
               </div>
 
-              <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+              <div style={{ marginTop: 2, display: "grid", gap: 8, paddingBottom: 6 }}>
                 <textarea
                   className="input"
                   rows={2}
@@ -597,34 +829,45 @@ export default function DiscoverPage() {
             </div>
           </div>
 
-          <div className="card">
+          {center ? (
+            <GoogleMapPanel
+              center={center}
+              points={points}
+              onSelect={(name) => {
+                const match = allResults.find((r) => r.restaurant_name === name) ?? null;
+                setSelected(match);
+              }}
+            />
+          ) : (
+            <div className="card">
+              <div className="cardInner">
+                <div className="small">Select an area to show the map and get recommendations.</div>
+              </div>
+            </div>
+          )}
+        </div>
+        {/* RIGHT: Snapshot + Map + Results */}
+        <div className="mapColumn">
+          <div className="card snapshotStrip">
             <div className="cardInner">
-              <div style={{ fontWeight: 900 }}>Live Event Snapshot</div>
+              <div className="sectionTitle">Live Event Snapshot</div>
 
-              <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
-                {!requirements.areaLabel ? (
-                  <div className="small" style={{ color: "var(--muted)" }}>
-                    Select a location from the dropdown to enable recommendations.
-                  </div>
-                ) : null}
+              <div className="snapshotStripBody">
                 <PlaceSearch
                   defaultValue={
                     requirements.areaLabel || (isExplore ? DEFAULT_AREA_LABEL : "")
                   }
                   onSelect={(x) => {
+                    lastManualAreaLabelRef.current = x.label;
+                    lastGeocodedAreaLabelRef.current = x.label;
                     setCenter({ lat: x.lat, lng: x.lng });
                     setRequirements((prev) => ({ ...prev, areaLabel: x.label }));
                   }}
                 />
 
-                {(
+                <div className="snapshotStripFields">
+                  {(
                   [
-                    {
-                      key: "location",
-                      label: "Location",
-                      value: requirements.areaLabel ?? "",
-                      editPrompt: "Set the location to SOMA, San Francisco.",
-                    },
                     {
                       key: "headcount",
                       label: "Guests",
@@ -650,12 +893,6 @@ export default function DiscoverPage() {
                       editPrompt: "Set time to 6:30pm.",
                     },
                     {
-                      key: "eventType",
-                      label: "Event type",
-                      value: requirements.eventType ?? "",
-                      editPrompt: "This is a team dinner.",
-                    },
-                    {
                       key: "privacyLevel",
                       label: "Privacy",
                       value: requirements.privacyLevel ?? "",
@@ -673,42 +910,104 @@ export default function DiscoverPage() {
                       value: requirements.noiseLevel ?? "",
                       editPrompt: "We want it to be quiet.",
                     },
+                    {
+                      key: "eventType",
+                      label: "Event type",
+                      value: requirements.eventType ?? "",
+                      editPrompt: "This is a team dinner.",
+                    },
                   ] as SnapshotField[]
                 ).map((row) => (
                   <div
                     key={row.label}
-                    className={`snapshotRow${lastUpdatedField === row.key ? " isUpdated" : ""}`}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr auto",
-                      gap: 10,
-                      padding: "8px 10px",
-                      borderRadius: 12,
-                      border: "1px solid var(--border)",
-                      background: "rgba(255,255,255,0.04)",
-                    }}
+                    className={`snapshotRow snapshotStripItem${
+                      lastUpdatedField === row.key ? " isUpdated" : ""
+                    }`}
                   >
-                    <div>
-                      <div className="small" style={{ fontWeight: 700 }}>
-                        {row.label}
-                      </div>
-                      <div className="small" style={{ color: "var(--text)" }}>
-                        {row.value ? row.value : "Not specified"}
-                      </div>
+                    <div className="snapshotStripContent">
+                      <div className="snapshotStripLabel">{row.label}</div>
+                      {editingField === row.key ? (
+                        <div className="snapshotStripInputRow">
+                          {row.key === "budgetTotal" ? (
+                            <span className="snapshotStripCurrency">$</span>
+                          ) : null}
+                          <input
+                            className="input snapshotStripInput"
+                            value={editingValue}
+                            autoFocus
+                            onChange={(e) => setEditingValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                commitInlineEdit(row.key, editingValue);
+                              }
+                              if (e.key === "Escape") {
+                                setEditingField(null);
+                              }
+                            }}
+                            onBlur={() => commitInlineEdit(row.key, editingValue)}
+                          />
+                        </div>
+                      ) : (
+                        <div className="snapshotStripValue">
+                          {row.value
+                            ? row.key === "budgetTotal"
+                              ? (() => {
+                                  const budget = parseNumber(row.value);
+                                  if (budget == null) return `$${row.value} total`;
+                                  return `$${budget} total`;
+                                })()
+                              : row.value
+                            : "Not specified"}
+                        </div>
+                      )}
                     </div>
+                    {row.key === "budgetTotal" && editingField === row.key ? (
+                      <div className="snapshotStripToggle">
+                        <button
+                          type="button"
+                          className={`snapshotToggleBtn ${
+                            budgetMode === "total" ? "isActive" : ""
+                          }`}
+                          onClick={() => setBudgetMode("total")}
+                          onMouseDown={(e) => e.preventDefault()}
+                          aria-pressed={budgetMode === "total"}
+                        >
+                          Total
+                        </button>
+                        <button
+                          type="button"
+                          className={`snapshotToggleBtn ${
+                            budgetMode === "perHead" ? "isActive" : ""
+                          }`}
+                          onClick={() => setBudgetMode("perHead")}
+                          onMouseDown={(e) => e.preventDefault()}
+                          aria-pressed={budgetMode === "perHead"}
+                        >
+                          Per person
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="snapshotStripSpacer" />
+                    )}
                     <button
-                      className="btn btnGhost"
-                      onClick={() => insertPrompt(row.editPrompt)}
+                      className="btn btnGhost snapshotStripEdit"
+                      onClick={() =>
+                        editingField === row.key
+                          ? commitInlineEdit(row.key, editingValue)
+                          : startInlineEdit(row.key, row.value)
+                      }
                       aria-label={`Edit ${row.label}`}
                     >
-                      ✎
+                      {editingField === row.key ? "✓" : "✎"}
                     </button>
                   </div>
                 ))}
+                </div>
 
                 <div className="small" style={{ color: "var(--muted)" }}>
                   {!requirements.areaLabel
-                    ? "Please select a location from the area/address dropdown in Live Event Snapshot to start recommendations."
+                    ? "Please type the location you’re interested in into the area/address box in Live Event Snapshot to start recommendations."
                     : missingRequired.length
                       ? `Need: ${missingRequired.map((f) => MISSING_LABELS[f] ?? f).join(", ")}`
                       : loading
@@ -731,26 +1030,6 @@ export default function DiscoverPage() {
               </div>
             </div>
           </div>
-        </div>
-        {/* RIGHT: Map + Results */}
-        <div className="mapColumn">
-          {center ? (
-            <GoogleMapPanel
-              center={center}
-              points={points}
-              onSelect={(name) => {
-                const match = allResults.find((r) => r.restaurant_name === name) ?? null;
-                setSelected(match);
-              }}
-            />
-          ) : (
-            <div className="card">
-              <div className="cardInner">
-                <div className="small">Select an area to show the map and get recommendations.</div>
-              </div>
-            </div>
-          )}
-
           {showDefaultHeader ? (
             allSorted.length ? (
               <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
@@ -758,7 +1037,7 @@ export default function DiscoverPage() {
                 <div className="resultsGrid">
                   {allSorted.map((r) => (
                     <div key={r.restaurant_name} ref={setCardRef(r.restaurant_name)}>
-                      <RestaurantCard item={r} onClick={() => setSelected(r)} />
+                      <RestaurantCard item={r} onClick={() => viewVenue(r)} />
                     </div>
                   ))}
                 </div>
@@ -768,14 +1047,19 @@ export default function DiscoverPage() {
             <>
               {data?.top3?.length ? (
                 <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
-                  <div className="sectionTitle sectionTitleDark">Top 3 Recommendations</div>
+                  <div
+                    className="sectionTitle sectionTitleDark"
+                    style={{ fontWeight: 800 }}
+                  >
+                    Top Recommendations
+                  </div>
                   <div className="resultsGrid">
                     {data.top3.map((r, i) => (
                       <div key={r.restaurant_name} ref={setCardRef(r.restaurant_name)}>
                         <RestaurantCard
                           item={r}
-                          badge={`Top ${i + 1}`}
-                          onClick={() => setSelected(r)}
+                          badge={i < 3 ? `Top ${i + 1}` : undefined}
+                          onClick={() => viewVenue(r)}
                         />
                       </div>
                     ))}
@@ -785,11 +1069,16 @@ export default function DiscoverPage() {
 
               {data?.others?.length ? (
                 <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
-                  <div className="sectionTitle sectionTitleDark">Other Restaurants</div>
+                  <div
+                    className="sectionTitle sectionTitleDark"
+                    style={{ fontWeight: 800 }}
+                  >
+                    Other Restaurants
+                  </div>
                   <div className="resultsGrid">
                     {data.others.map((r) => (
                       <div key={r.restaurant_name} ref={setCardRef(r.restaurant_name)}>
-                        <RestaurantCard item={r} onClick={() => setSelected(r)} />
+                        <RestaurantCard item={r} onClick={() => viewVenue(r)} />
                       </div>
                     ))}
                   </div>

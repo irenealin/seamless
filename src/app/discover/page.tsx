@@ -10,7 +10,7 @@ import { loadGoogleMaps } from "@/lib/googleMaps";
 
 const DEFAULT_CENTER = { lat: 37.4419, lng: -122.143 };
 const DEFAULT_AREA_LABEL = "Palo Alto, CA";
-const REQUIRED_FIELDS = ["areaLabel", "headcount", "budgetTotal", "dateNeeded"] as const;
+const REQUIRED_FIELDS = ["areaLabel", "headcount", "budgetTotal"] as const;
 const MISSING_LABELS: Record<string, string> = {
   areaLabel: "location",
   headcount: "headcount",
@@ -113,6 +113,27 @@ function useDebouncedEffect(effect: () => void, deps: unknown[], delayMs: number
   }, deps); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
+function inferAreaLabel(message: string) {
+  const text = message.toLowerCase();
+  const rules: Array<{ pattern: RegExp; label: string }> = [
+    { pattern: /\b(sf|san\s+francisco|s\.f\.)\b/i, label: "San Francisco, CA" },
+    { pattern: /\b(nyc|new\s+york|new\s+york\s+city)\b/i, label: "New York, NY" },
+    { pattern: /\b(la|l\.a\.|los\s+angeles)\b/i, label: "Los Angeles, CA" },
+    { pattern: /\b(chicago)\b/i, label: "Chicago, IL" },
+    { pattern: /\b(boston)\b/i, label: "Boston, MA" },
+    { pattern: /\b(seattle)\b/i, label: "Seattle, WA" },
+    { pattern: /\b(miami)\b/i, label: "Miami, FL" },
+    { pattern: /\b(austin)\b/i, label: "Austin, TX" },
+    { pattern: /\b(denver)\b/i, label: "Denver, CO" },
+    { pattern: /\b(dallas)\b/i, label: "Dallas, TX" },
+    { pattern: /\b(houston)\b/i, label: "Houston, TX" },
+  ];
+  for (const rule of rules) {
+    if (rule.pattern.test(text)) return rule.label;
+  }
+  return null;
+}
+
 export default function DiscoverPage() {
   const searchParams = useSearchParams();
   const isExplore = searchParams.get("mode") === "explore";
@@ -126,7 +147,7 @@ export default function DiscoverPage() {
     {
       role: "assistant",
       content:
-        "Welcome to Seamless! Happy to help you find your next private dining room. To get started, tell me about your event — location, headcount, budget, date, time, and desired vibe. I’ll ask follow-ups if needed.",
+        "Welcome to Seamless! Happy to help you find your next private dining room. To get started, tell me about your event — location, headcount, budget, and desired vibe. I’ll ask follow-ups if needed.",
     },
   ]);
   const [draft, setDraft] = useState("");
@@ -147,6 +168,7 @@ export default function DiscoverPage() {
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [showDefaultHeader, setShowDefaultHeader] = useState(true);
   const [roomIndexes, setRoomIndexes] = useState<Record<string, number>>({});
+  const [refreshTick, setRefreshTick] = useState(0);
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const lastManualAreaLabelRef = useRef<string | null>(null);
   const lastGeocodedAreaLabelRef = useRef<string | null>(null);
@@ -436,8 +458,14 @@ export default function DiscoverPage() {
         ...nextMessages,
         { role: "assistant", content: json.assistantMessage || "Thanks! Let me check that." },
       ]);
-      if (json.requirements) {
-        setRequirements((prev) => ({ ...prev, ...json.requirements }));
+      const inferredArea = inferAreaLabel(text);
+      if (json.requirements || inferredArea) {
+        setRequirements((prev) => {
+          const merged = { ...prev, ...(json.requirements ?? {}) };
+          if (inferredArea) merged.areaLabel = inferredArea;
+          return merged;
+        });
+        setRefreshTick((prev) => prev + 1);
       }
       if (Array.isArray(json.missing)) setMissing(json.missing);
       if (typeof json.isComplete === "boolean") setIsComplete(json.isComplete);
@@ -529,8 +557,23 @@ export default function DiscoverPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-
-    const json = await resp.json();
+    let json: ApiResp | null = null;
+    const contentType = resp.headers.get("content-type") ?? "";
+    const rawText = await resp.text();
+    if (contentType.includes("application/json") && rawText) {
+      try {
+        json = JSON.parse(rawText) as ApiResp;
+      } catch {
+        console.error("Recommendations returned invalid JSON:", rawText.slice(0, 200));
+      }
+    } else if (rawText) {
+      console.error("Recommendations returned non-JSON:", rawText.slice(0, 200));
+    }
+    if (!resp.ok || !json) {
+      console.error("Recommendations request failed:", resp.status, resp.statusText);
+      setLoading(false);
+      return;
+    }
     setData(json);
     setLoading(false);
   }
@@ -544,7 +587,7 @@ export default function DiscoverPage() {
     if (!center) return;
     if (missingRequired.length) return;
     getRecommendations();
-  }, [center?.lat, center?.lng, requirements, missingRequired.length], 450);
+  }, [center?.lat, center?.lng, requirements, missingRequired.length, refreshTick], 450);
 
   return (
     <div className="discoverPage">
@@ -558,7 +601,7 @@ export default function DiscoverPage() {
                 <div className="small">
                   Before we start, type the location you’re interested in into the area/address box
                   in the Live Event Snapshot. Then describe your event — location, headcount,
-                  budget, date, time, and desired vibe. I’ll ask one follow-up if needed.
+                  budget, and desired vibe. I’ll ask one follow-up if needed.
                 </div>
               </div>
 

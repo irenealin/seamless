@@ -22,20 +22,17 @@ const ResponseSchema = z.object({
   missing: z.array(z.string()).optional(),
 });
 
-const REQUIRED_FIELDS: Array<keyof Requirements> = [
-  "areaLabel",
-  "headcount",
-  "budgetTotal",
-  "dateNeeded",
-  "timeNeeded",
-];
+const REQUIRED_FIELDS: Array<keyof Requirements> = ["areaLabel", "headcount", "budgetTotal"];
 
 const SYSTEM_PROMPT = `You are an intake concierge for private dining events.
 Your job is to extract structured requirements from the conversation.
 Ask at most ONE focused follow-up question only if critical info is missing.
+Never ask for date or time.
 Do NOT ask about cake fees or corkage fees unless the user explicitly brings them up.
 If vibe is missing, ask about it as a secondary, optional preference (but do not block completion on it).
 If location is missing, explicitly remind the user to type the location they're interested in into the area/address box in the Live Event Snapshot to begin recommendations.
+When the user mentions a city name (e.g., "sf dinner", "san francisco", "chicago") infer and set areaLabel to that city even if they don't explicitly say "location".
+Expand common abbreviations (e.g., "sf" -> "San Francisco, CA"; "nyc" -> "New York, NY"; "la" -> "Los Angeles, CA").
 If enough info is available, confirm briefly and say you are ready to recommend venues.
 Return a single JSON object with keys: assistantMessage, requirements, isComplete, missing.
 Requirements must only include these keys:
@@ -118,7 +115,7 @@ export async function POST(req: Request) {
     const missing = computeMissing(current);
     return NextResponse.json({
       assistantMessage:
-        "I had trouble extracting the details. Could you confirm the location, headcount, budget, date, and time?",
+        "I had trouble extracting the details. Could you confirm the location, headcount, and budget?",
       requirements: current,
       isComplete: missing.length === 0,
       missing,

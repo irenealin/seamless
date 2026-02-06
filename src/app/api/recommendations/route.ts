@@ -87,13 +87,47 @@ export async function POST(req: Request) {
     }
   }
 
+  const cityTokenRaw = (parsed.data.areaLabel ?? "").split(",")[0]?.trim().toLowerCase();
+  const normalize = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  const cityToken = cityTokenRaw ? normalize(cityTokenRaw) : "";
+  const cityInitials = cityToken
+    ? cityToken
+        .split(" ")
+        .filter(Boolean)
+        .map((w) => w[0])
+        .join("")
+    : "";
+  const matchesCity = (address: string | null | undefined) => {
+    if (!address || !cityToken) return false;
+    const norm = normalize(address);
+    if (norm.includes(cityToken)) return true;
+    if (cityInitials && norm.split(" ").includes(cityInitials)) return true;
+    return false;
+  };
+
   const hasRadius = parsed.data.radiusMiles != null;
-  const normalizeReasons = (reasons: string[]) =>
-    hasRadius ? reasons : reasons.map((r) => r.replace(" (outside radius)", ""));
+
+  const adjustReasonsForCity = (reasons: string[], isCityMatch: boolean) => {
+    if (hasRadius) return reasons;
+    const cleaned = reasons.map((r) => r.replace(" (outside radius)", ""));
+    if (isCityMatch) return cleaned;
+    return cleaned.map((r) => {
+      if (r.includes("miles away") && !r.includes("(outside radius)")) {
+        return `${r} (outside radius)`;
+      }
+      return r;
+    });
+  };
 
   const restaurants = Array.from(byRestaurant.entries())
     .map(([restaurant_name, g]) => {
       const best = g.best;
+      const isCityMatch = matchesCity(best.row.address);
 
       // OPTIONAL: expose distance if your scoreRow returns it in reasons only
       // We'll just pass through reasons and core fields cleanly.
@@ -110,7 +144,7 @@ export async function POST(req: Request) {
         score: best.score,
         priorityScore: best.priorityScore,
         secondaryScore: best.secondaryScore,
-        reasons: normalizeReasons(best.reasons),
+        reasons: adjustReasonsForCity(best.reasons, isCityMatch),
         distanceMiles: best.distanceMilesAway ?? null,
         bestRoom: {
           room_name: best.row.room_name,
@@ -142,29 +176,6 @@ export async function POST(req: Request) {
       if (a.secondaryScore !== b.secondaryScore) return b.secondaryScore - a.secondaryScore;
       return b.score - a.score;
     });
-
-  const cityTokenRaw = (parsed.data.areaLabel ?? "").split(",")[0]?.trim().toLowerCase();
-  const normalize = (value: string) =>
-    value
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-  const cityToken = cityTokenRaw ? normalize(cityTokenRaw) : "";
-  const cityInitials = cityToken
-    ? cityToken
-        .split(" ")
-        .filter(Boolean)
-        .map((w) => w[0])
-        .join("")
-    : "";
-  const matchesCity = (address: string | null | undefined) => {
-    if (!address || !cityToken) return false;
-    const norm = normalize(address);
-    if (norm.includes(cityToken)) return true;
-    if (cityInitials && norm.split(" ").includes(cityInitials)) return true;
-    return false;
-  };
 
   const eligibleForTop3 = restaurants.filter((r) => {
     if (parsed.data.radiusMiles != null) {

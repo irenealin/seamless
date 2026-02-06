@@ -65,19 +65,19 @@ export function GoogleMapPanel({
 
         let marker = markersRef.current.get(p.restaurant_name);
         if (!marker) {
-          marker = new google.maps.Marker({
+          const newMarker = new google.maps.Marker({
             position: { lat: p.lat, lng: p.lng },
             map,
             title: p.restaurant_name,
           });
-          marker.addListener("click", () => {
-            const info = marker.get("info") as Point | undefined;
+          newMarker.addListener("click", () => {
+            const info = newMarker.get("info") as Point | undefined;
             onSelect?.(info?.restaurant_name ?? p.restaurant_name);
           });
-          marker.addListener("mouseover", () => {
+          newMarker.addListener("mouseover", () => {
             const info = infoWindowRef.current;
             if (!info) return;
-            const payload = (marker.get("info") as Point | undefined) ?? p;
+            const payload = (newMarker.get("info") as Point | undefined) ?? p;
             const name = escapeHtml(payload.restaurant_name);
             const cuisine = payload.cuisinePhrase
               ? `<div style="opacity:0.85; font-size:12px; margin-top:2px;">${escapeHtml(payload.cuisinePhrase)}</div>`
@@ -99,7 +99,8 @@ export function GoogleMapPanel({
             );
             info.open({ anchor: marker, map });
           });
-          marker.addListener("mouseout", () => infoWindowRef.current?.close());
+          newMarker.addListener("mouseout", () => infoWindowRef.current?.close());
+          marker = newMarker;
         } else {
           marker.setPosition({ lat: p.lat, lng: p.lng });
           marker.setMap(map);

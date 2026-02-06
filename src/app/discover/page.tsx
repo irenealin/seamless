@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { PlaceSearch } from "@/components/PlaceSearch";
 import { GoogleMapPanel } from "@/components/GoogleMapPanel";
@@ -135,7 +135,7 @@ function inferAreaLabel(message: string) {
   return null;
 }
 
-export default function DiscoverPage() {
+function DiscoverPageContent() {
   const searchParams = useSearchParams();
   const isExplore = searchParams.get("mode") === "explore";
   const [center, setCenter] = useState<{ lat: number; lng: number } | null>(
@@ -324,7 +324,7 @@ export default function DiscoverPage() {
         delete next[field as keyof Requirements];
         return next;
       }
-      next[field as keyof Requirements] = nextValue as Requirements[keyof Requirements];
+      (next as Record<string, unknown>)[field] = nextValue;
       return next;
     });
     if (field === "budgetTotal" && budgetMode === "perHead") {
@@ -544,7 +544,8 @@ export default function DiscoverPage() {
 
       const json = (await resp.json()) as ChatResponse;
       if (!resp.ok) {
-        throw new Error(json?.assistantMessage || json?.error || "Request failed");
+        const message = (json as any)?.assistantMessage || (json as any)?.error || "Request failed";
+        throw new Error(message);
       }
 
       setMessages([
@@ -1275,5 +1276,13 @@ export default function DiscoverPage() {
         </div>
       ) : null}
     </div>
+  );
+}
+
+export default function DiscoverPage() {
+  return (
+    <Suspense fallback={null}>
+      <DiscoverPageContent />
+    </Suspense>
   );
 }

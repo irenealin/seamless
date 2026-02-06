@@ -705,12 +705,6 @@ export default function DiscoverPage() {
               >
                 <div
                   className="conciergeScroll"
-                  onWheelCapture={(e) => {
-                    const el = e.currentTarget;
-                    el.scrollTop += e.deltaY;
-                    e.preventDefault();
-                    e.stopPropagation();
-                  }}
                   style={{
                     height: "100%",
                     overflowY: "auto",
@@ -718,7 +712,7 @@ export default function DiscoverPage() {
                     display: "flex",
                     flexDirection: "column",
                     gap: 10,
-                    justifyContent: "flex-end",
+                    justifyContent: "flex-start",
                   }}
                 >
                   {messages.map((msg, idx) => (

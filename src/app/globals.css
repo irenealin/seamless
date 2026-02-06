@@ -1084,4 +1084,5 @@ body:has(.landingPage) {
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
   -webkit-overflow-scrolling: touch;
+  cursor: auto;
 }

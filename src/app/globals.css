@@ -756,7 +756,7 @@ body:has(.discoverPage) .header{
 }
 .otherRoomsGallery img{
   width: 405px;
-  height: 303.75 px;
+  height: 303.75px;
   flex: 0 0 auto;
   object-fit: cover;
   border-radius: 10px;

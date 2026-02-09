@@ -72,8 +72,19 @@ type RestaurantResult = {
 
   rooms?: Array<{
     room_name?: string | null;
+    room_desc?: string | null;
     image_paths?: string[] | null;
     room_photo_link?: string | null;
+    seated_capacity?: number | null;
+    standing_capacity?: number | null;
+    privacy_level?: string | null;
+    noise_level?: string | null;
+    a_v?: string | null;
+    min_spend_estimate?: number | null;
+    score?: number | null;
+    reasons?: string[];
+    withinRadius?: boolean | null;
+    isFitting?: boolean | null;
   }>;
 
   roomsPreview?: string[];
@@ -162,6 +173,7 @@ function DiscoverPageContent() {
   const [editingField, setEditingField] = useState<SnapshotField["key"] | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const [budgetMode, setBudgetMode] = useState<"total" | "perHead">("total");
+  const [hasChatSnapshot, setHasChatSnapshot] = useState(false);
 
   // API response state
   const [loading, setLoading] = useState(false);
@@ -358,19 +370,21 @@ function DiscoverPageContent() {
       return `${supabaseUrl}/storage/v1/object/public/${bucket}/${safe}`;
     };
 
+    const fromBestRoom = (item.bestRoom?.room_photo_link ?? "")
+      .split(",")
+      .map((s: string) => s.trim())
+      .filter(Boolean)
+      .map((p) => (p.startsWith("http") ? p : makePublicUrl(p)));
+
     const fromArray = (item.image_paths ?? [])
       .map((p) => p.trim())
       .filter(Boolean)
       .map((p) => (p.startsWith("http") ? p : makePublicUrl(p)));
 
-    if (fromArray.length) return fromArray;
+    const merged = [...fromBestRoom, ...fromArray];
+    if (merged.length) return Array.from(new Set(merged));
 
-    const raw = item?.bestRoom?.room_photo_link ?? "";
-    return raw
-      .split(",")
-      .map((s: string) => s.trim())
-      .filter(Boolean)
-      .map((p) => (p.startsWith("http") ? p : makePublicUrl(p)));
+    return [];
   }
 
   function getRoomPhotos(room: { image_paths?: string[] | null; room_photo_link?: string | null }) {
@@ -598,6 +612,7 @@ function DiscoverPageContent() {
           setBudgetMode("total");
         }
         setRefreshTick((prev) => prev + 1);
+        setHasChatSnapshot(true);
       }
       if (Array.isArray(json.missing)) setMissing(json.missing);
       if (typeof json.isComplete === "boolean") setIsComplete(json.isComplete);
@@ -849,188 +864,199 @@ function DiscoverPageContent() {
         </div>
         {/* RIGHT: Snapshot + Map + Results */}
         <div className="mapColumn">
-          <div className="card snapshotStrip">
-            <div className="cardInner">
-              <div className="sectionTitle">Live Event Snapshot</div>
+          {hasChatSnapshot ? (
+            <div className="card snapshotStrip">
+              <div className="cardInner">
+                <div className="sectionTitle">Live Event Snapshot</div>
 
-              <div className="snapshotStripBody">
-                <PlaceSearch
-                  defaultValue={
-                    requirements.areaLabel || (isExplore ? DEFAULT_AREA_LABEL : "")
-                  }
-                  onSelect={(x) => {
-                    lastManualAreaLabelRef.current = x.label;
-                    lastGeocodedAreaLabelRef.current = x.label;
-                    setCenter({ lat: x.lat, lng: x.lng });
-                    setRequirements((prev) => ({ ...prev, areaLabel: x.label }));
-                  }}
-                />
+                <div className="snapshotStripBody">
+                  <PlaceSearch
+                    defaultValue={
+                      requirements.areaLabel || (isExplore ? DEFAULT_AREA_LABEL : "")
+                    }
+                    onSelect={(x) => {
+                      lastManualAreaLabelRef.current = x.label;
+                      lastGeocodedAreaLabelRef.current = x.label;
+                      setCenter({ lat: x.lat, lng: x.lng });
+                      setRequirements((prev) => ({ ...prev, areaLabel: x.label }));
+                    }}
+                  />
 
-                <div className="snapshotStripFields">
-                  {(
-                  [
-                    {
-                      key: "headcount",
-                      label: "Guests",
-                      value: requirements.headcount ?? "",
-                      editPrompt: "Set headcount to 12 people.",
-                    },
-                    {
-                      key: "budgetTotal",
-                      label: "Budget",
-                      value: requirements.budgetTotal ?? "",
-                      editPrompt: "Budget is around $4000 total.",
-                    },
-                    {
-                      key: "dateNeeded",
-                      label: "Date",
-                      value: requirements.dateNeeded ?? "",
-                      editPrompt: "The date is Feb 10.",
-                    },
-                    {
-                      key: "timeNeeded",
-                      label: "Time",
-                      value: requirements.timeNeeded ?? "",
-                      editPrompt: "Set time to 6:30pm.",
-                    },
-                    {
-                      key: "privacyLevel",
-                      label: "Privacy",
-                      value: requirements.privacyLevel ?? "",
-                      editPrompt: "We need a fully private room.",
-                    },
-                    {
-                      key: "radiusMiles",
-                      label: "Radius",
-                      value: requirements.radiusMiles ?? "",
-                      editPrompt: "Set radius to 2 miles.",
-                    },
-                    {
-                      key: "noiseLevel",
-                      label: "Noise",
-                      value: requirements.noiseLevel ?? "",
-                      editPrompt: "We want it to be quiet.",
-                    },
-                    {
-                      key: "eventType",
-                      label: "Event type",
-                      value: requirements.eventType ?? "",
-                      editPrompt: "This is a team dinner.",
-                    },
-                  ] as SnapshotField[]
-                ).map((row) => (
-                  <div
-                    key={row.label}
-                    className={`snapshotRow snapshotStripItem${
-                      lastUpdatedField === row.key ? " isUpdated" : ""
-                    }`}
-                  >
-                    <div className="snapshotStripContent">
-                      <div className="snapshotStripLabel">{row.label}</div>
-                      {editingField === row.key ? (
-                        <div className="snapshotStripInputRow">
-                          {row.key === "budgetTotal" ? (
-                            <span className="snapshotStripCurrency">$</span>
-                          ) : null}
-                          <input
-                            className="input snapshotStripInput"
-                            value={editingValue}
-                            autoFocus
-                            onChange={(e) => setEditingValue(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                commitInlineEdit(row.key, editingValue);
-                              }
-                              if (e.key === "Escape") {
-                                setEditingField(null);
-                              }
-                            }}
-                            onBlur={() => commitInlineEdit(row.key, editingValue)}
-                          />
+                  <div className="snapshotStripFields">
+                    {(
+                    [
+                      {
+                        key: "headcount",
+                        label: "Guests",
+                        value: requirements.headcount ?? "",
+                        editPrompt: "Set headcount to 12 people.",
+                      },
+                      {
+                        key: "budgetTotal",
+                        label: "Budget",
+                        value: requirements.budgetTotal ?? "",
+                        editPrompt: "Budget is around $4000 total.",
+                      },
+                      {
+                        key: "dateNeeded",
+                        label: "Date",
+                        value: requirements.dateNeeded ?? "",
+                        editPrompt: "The date is Feb 10.",
+                      },
+                      {
+                        key: "timeNeeded",
+                        label: "Time",
+                        value: requirements.timeNeeded ?? "",
+                        editPrompt: "Set time to 6:30pm.",
+                      },
+                      {
+                        key: "privacyLevel",
+                        label: "Privacy",
+                        value: requirements.privacyLevel ?? "",
+                        editPrompt: "We need a fully private room.",
+                      },
+                      {
+                        key: "radiusMiles",
+                        label: "Radius",
+                        value: requirements.radiusMiles ?? "",
+                        editPrompt: "Set radius to 2 miles.",
+                      },
+                      {
+                        key: "noiseLevel",
+                        label: "Noise",
+                        value: requirements.noiseLevel ?? "",
+                        editPrompt: "We want it to be quiet.",
+                      },
+                      {
+                        key: "eventType",
+                        label: "Event type",
+                        value: requirements.eventType ?? "",
+                        editPrompt: "This is a team dinner.",
+                      },
+                    ] as SnapshotField[]
+                  ).map((row) => (
+                    <div
+                      key={row.label}
+                      className={`snapshotRow snapshotStripItem${
+                        lastUpdatedField === row.key ? " isUpdated" : ""
+                      }`}
+                    >
+                      <div className="snapshotStripContent">
+                        <div className="snapshotStripLabel">{row.label}</div>
+                        {editingField === row.key ? (
+                          <div className="snapshotStripInputRow">
+                            {row.key === "budgetTotal" ? (
+                              <span className="snapshotStripCurrency">$</span>
+                            ) : null}
+                            <input
+                              className="input snapshotStripInput"
+                              value={editingValue}
+                              autoFocus
+                              onChange={(e) => setEditingValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  commitInlineEdit(row.key, editingValue);
+                                }
+                                if (e.key === "Escape") {
+                                  setEditingField(null);
+                                }
+                              }}
+                              onBlur={() => commitInlineEdit(row.key, editingValue)}
+                            />
+                          </div>
+                        ) : (
+                          <div className="snapshotStripValue">
+                            {row.value
+                              ? row.key === "budgetTotal"
+                                ? (() => {
+                                    const budget = parseNumber(row.value);
+                                    if (budget == null) return `$${row.value} total`;
+                                    return `$${budget} total`;
+                                  })()
+                                : row.value
+                              : "Not specified"}
+                          </div>
+                        )}
+                      </div>
+                      {row.key === "budgetTotal" && editingField === row.key ? (
+                        <div className="snapshotStripToggle">
+                          <button
+                            type="button"
+                            className={`snapshotToggleBtn ${
+                              budgetMode === "total" ? "isActive" : ""
+                            }`}
+                            onClick={() => setBudgetMode("total")}
+                            onMouseDown={(e) => e.preventDefault()}
+                            aria-pressed={budgetMode === "total"}
+                          >
+                            Total
+                          </button>
+                          <button
+                            type="button"
+                            className={`snapshotToggleBtn ${
+                              budgetMode === "perHead" ? "isActive" : ""
+                            }`}
+                            onClick={() => setBudgetMode("perHead")}
+                            onMouseDown={(e) => e.preventDefault()}
+                            aria-pressed={budgetMode === "perHead"}
+                          >
+                            Per person
+                          </button>
                         </div>
                       ) : (
-                        <div className="snapshotStripValue">
-                          {row.value
-                            ? row.key === "budgetTotal"
-                              ? (() => {
-                                  const budget = parseNumber(row.value);
-                                  if (budget == null) return `$${row.value} total`;
-                                  return `$${budget} total`;
-                                })()
-                              : row.value
-                            : "Not specified"}
-                        </div>
+                        <span className="snapshotStripSpacer" />
                       )}
+                      <button
+                        className="btn btnGhost snapshotStripEdit"
+                        onClick={() =>
+                          editingField === row.key
+                            ? commitInlineEdit(row.key, editingValue)
+                            : startInlineEdit(row.key, row.value)
+                        }
+                        aria-label={`Edit ${row.label}`}
+                      >
+                        {editingField === row.key ? "✓" : "✎"}
+                      </button>
                     </div>
-                    {row.key === "budgetTotal" && editingField === row.key ? (
-                      <div className="snapshotStripToggle">
-                        <button
-                          type="button"
-                          className={`snapshotToggleBtn ${
-                            budgetMode === "total" ? "isActive" : ""
-                          }`}
-                          onClick={() => setBudgetMode("total")}
-                          onMouseDown={(e) => e.preventDefault()}
-                          aria-pressed={budgetMode === "total"}
-                        >
-                          Total
-                        </button>
-                        <button
-                          type="button"
-                          className={`snapshotToggleBtn ${
-                            budgetMode === "perHead" ? "isActive" : ""
-                          }`}
-                          onClick={() => setBudgetMode("perHead")}
-                          onMouseDown={(e) => e.preventDefault()}
-                          aria-pressed={budgetMode === "perHead"}
-                        >
-                          Per person
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="snapshotStripSpacer" />
-                    )}
-                    <button
-                      className="btn btnGhost snapshotStripEdit"
-                      onClick={() =>
-                        editingField === row.key
-                          ? commitInlineEdit(row.key, editingValue)
-                          : startInlineEdit(row.key, row.value)
-                      }
-                      aria-label={`Edit ${row.label}`}
-                    >
-                      {editingField === row.key ? "✓" : "✎"}
-                    </button>
+                  ))}
                   </div>
-                ))}
-                </div>
 
-                <div className="small" style={{ color: "var(--muted)" }}>
-                  {!requirements.areaLabel
-                    ? "Please type the location you’re interested in into the area/address box in Live Event Snapshot to start recommendations."
-                    : missingRequired.length
-                      ? `Need: ${missingRequired.map((f) => MISSING_LABELS[f] ?? f).join(", ")}`
-                      : loading
-                        ? "Updating results…"
-                        : "Results are up to date."}
-                </div>
-                <button
-                  className="btn btnGhost"
-                  onClick={() => getRecommendations()}
-                  disabled={!center || loading}
-                >
-                  Refresh results
-                </button>
-
-                {data?.error ? (
-                  <div className="small" style={{ marginTop: 6, color: "crimson" }}>
-                    Error: {data.error}
+                  <div className="small" style={{ color: "var(--muted)" }}>
+                    {!requirements.areaLabel
+                      ? "Please type the location you’re interested in into the area/address box in Live Event Snapshot to start recommendations."
+                      : missingRequired.length
+                        ? `Need: ${missingRequired.map((f) => MISSING_LABELS[f] ?? f).join(", ")}`
+                        : loading
+                          ? "Updating results…"
+                          : "Results are up to date."}
                   </div>
-                ) : null}
+                  <button
+                    className="btn btnGhost"
+                    onClick={() => getRecommendations()}
+                    disabled={!center || loading}
+                  >
+                    Refresh results
+                  </button>
+
+                  {data?.error ? (
+                    <div className="small" style={{ marginTop: 6, color: "crimson" }}>
+                      Error: {data.error}
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="card">
+              <div className="cardInner">
+                <div className="sectionTitle">Live Event Snapshot</div>
+                <div className="small" style={{ color: "var(--muted)", marginTop: 6 }}>
+                  Ask the AI concierge about your event to generate a live snapshot.
+                </div>
+              </div>
+            </div>
+          )}
           {showDefaultHeader ? (
             allSorted.length ? (
               <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
@@ -1097,6 +1123,11 @@ function DiscoverPageContent() {
               <div>
                 <div className="title">{selected.restaurant_name ?? "Restaurant"}</div>
                 <div className="small">{selected.address ?? ""}</div>
+                {selected.restaurant_des ? (
+                  <div className="small" style={{ marginTop: 6, color: "var(--muted)" }}>
+                    {selected.restaurant_des}
+                  </div>
+                ) : null}
               </div>
               <button className="modalClose" onClick={() => setSelected(null)} aria-label="Close">
                 ✕
@@ -1120,6 +1151,12 @@ function DiscoverPageContent() {
 
               <div className="modalGrid">
                 <div>
+                  <div className="small" style={{ fontWeight: 800, marginBottom: 6 }}>
+                    Cuisine
+                  </div>
+                  <div className="small" style={{ marginBottom: 12 }}>
+                    {selected.cuisine ?? selected.cuisinePhrase ?? "—"}
+                  </div>
                   <div className="small" style={{ fontWeight: 800, marginBottom: 6 }}>
                     Best room
                   </div>
@@ -1159,70 +1196,110 @@ function DiscoverPageContent() {
               </div>
 
               {(() => {
-                const bestName = selected.bestRoom?.room_name ?? "";
-                const otherRooms = (selected.rooms ?? []).filter(
-                  (r) => r.room_name && r.room_name !== bestName
-                );
-                return otherRooms.length ? (
-                  <div style={{ marginTop: 14 }}>
-                    <div className="small" style={{ fontWeight: 800, marginBottom: 6 }}>
-                      Other rooms
-                    </div>
-                    <div className="otherRoomsList">
-                      {otherRooms.map((room) => {
-                        const photos = getRoomPhotos(room);
-                        const roomName = room.room_name ?? "";
-                        const activeIndex = roomName ? (roomIndexes[roomName] ?? 0) : 0;
-                        const activeSrc = photos[activeIndex] ?? photos[0];
-                        return (
-                          <div key={room.room_name} className="otherRoomItem">
-                            <div className="small" style={{ fontWeight: 800 }}>
-                              {room.room_name}
-                            </div>
-                            {photos.length ? (
-                              <div className="roomCarousel">
-                                <button
-                                  className="roomArrow left"
-                                  onClick={() => cycleRoom(roomName, -1, photos.length)}
-                                  aria-label="Previous image"
-                                >
-                                  ‹
-                                </button>
-                                <div
-                                  className="roomSquare"
-                                  onClick={() =>
-                                    activeSrc && openLightbox(photos, activeIndex)
-                                  }
-                                  role="button"
-                                  tabIndex={0}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter" && activeSrc)
-                                      openLightbox(photos, activeIndex);
-                                  }}
-                                >
-                                  {activeSrc ? (
-                                    <img src={activeSrc} alt="" />
-                                  ) : (
-                                    <div className="small">No images available.</div>
-                                  )}
-                                </div>
-                                <button
-                                  className="roomArrow right"
-                                  onClick={() => cycleRoom(roomName, 1, photos.length)}
-                                  aria-label="Next image"
-                                >
-                                  ›
-                                </button>
-                              </div>
+                const rooms = (selected.rooms ?? []).filter((r) => r.room_name);
+                if (!rooms.length) return null;
+                const fittingRooms = rooms
+                  .filter((r) => r.isFitting)
+                  .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+                const otherRooms = rooms
+                  .filter((r) => !r.isFitting)
+                  .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+
+                const renderRoom = (room: (typeof rooms)[number]) => {
+                  const photos = getRoomPhotos(room);
+                  const roomName = room.room_name ?? "";
+                  const activeIndex = roomName ? (roomIndexes[roomName] ?? 0) : 0;
+                  const activeSrc = photos[activeIndex] ?? photos[0];
+                  return (
+                    <div key={room.room_name} className="otherRoomItem">
+                      <div className="small" style={{ fontWeight: 800 }}>
+                        {room.room_name}
+                      </div>
+                      {room.room_desc ? (
+                        <div className="small" style={{ color: "var(--muted)", marginTop: 4 }}>
+                          {room.room_desc}
+                        </div>
+                      ) : null}
+                      {photos.length ? (
+                        <div className="roomCarousel">
+                          <button
+                            className="roomArrow left"
+                            onClick={() => cycleRoom(roomName, -1, photos.length)}
+                            aria-label="Previous image"
+                          >
+                            ‹
+                          </button>
+                          <div
+                            className="roomSquare"
+                            onClick={() => activeSrc && openLightbox(photos, activeIndex)}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && activeSrc)
+                                openLightbox(photos, activeIndex);
+                            }}
+                          >
+                            {activeSrc ? (
+                              <img src={activeSrc} alt="" />
                             ) : (
                               <div className="small">No images available.</div>
                             )}
                           </div>
-                        );
-                      })}
+                          <button
+                            className="roomArrow right"
+                            onClick={() => cycleRoom(roomName, 1, photos.length)}
+                            aria-label="Next image"
+                          >
+                            ›
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="small">No images available.</div>
+                      )}
+                      <div className="small" style={{ marginTop: 6 }}>
+                        <b>Capacity:</b> {room.seated_capacity ?? "—"} seated
+                      </div>
+                      <div className="small">
+                        <b>Min spend:</b>{" "}
+                        {room.min_spend_estimate ? `$${room.min_spend_estimate}` : "—"}
+                      </div>
+                      <div className="small">
+                        <b>Privacy:</b> {room.privacy_level ?? "—"}
+                      </div>
+                      <div className="small">
+                        <b>Noise:</b> {room.noise_level ?? "—"}
+                      </div>
+                      <div className="small">
+                        <b>A/V:</b> {room.a_v ?? "—"}
+                      </div>
                     </div>
+                  );
+                };
+
+                return (
+                  <div style={{ marginTop: 14 }}>
+                    {fittingRooms.length ? (
+                      <div>
+                        <div className="small" style={{ fontWeight: 800, marginBottom: 6 }}>
+                          Fitting rooms
+                        </div>
+                        <div className="otherRoomsList">
+                          {fittingRooms.map((room) => renderRoom(room))}
+                        </div>
+                      </div>
+                    ) : null}
+                    {otherRooms.length ? (
+                      <div style={{ marginTop: fittingRooms.length ? 14 : 0 }}>
+                        <div className="small" style={{ fontWeight: 800, marginBottom: 6 }}>
+                          Other rooms
+                        </div>
+                        <div className="otherRoomsList">
+                          {otherRooms.map((room) => renderRoom(room))}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
-                ) : null;
+                );
               })()}
 
               <div className="row" style={{ marginTop: 16 }}>

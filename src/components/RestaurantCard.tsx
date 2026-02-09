@@ -47,6 +47,9 @@ export function RestaurantCard({
 
         <div style={{ marginTop: 10, display: "grid", gap: 6 }}>
           <div className="small">
+            <b>Cuisine:</b> {item.cuisine ?? item.cuisinePhrase ?? "—"}
+          </div>
+          <div className="small">
             <b>Best room:</b> {item.bestRoom?.room_name ?? "—"}
           </div>
           <div className="small">

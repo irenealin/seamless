@@ -159,11 +159,28 @@ export async function POST(req: Request) {
           room_photo_link: best.row.room_photo_link ?? null,
         },
         rooms: g.rooms
-          .map((x) => ({
-            room_name: x.row.room_name ?? null,
-            image_paths: x.row.image_paths ?? null,
-            room_photo_link: x.row.room_photo_link ?? null,
-          }))
+          .map((x) => {
+            const tooSmall = x.reasons.some((r) => r.startsWith("Too small"));
+            const outsideRadius = x.reasons.some((r) => r.includes("(outside radius)"));
+            const isFitting =
+              x.score >= 0 && !tooSmall && !(parsed.data.radiusMiles != null && outsideRadius);
+            return {
+              room_name: x.row.room_name ?? null,
+              room_desc: x.row.room_desc ?? null,
+              image_paths: x.row.image_paths ?? null,
+              room_photo_link: x.row.room_photo_link ?? null,
+              seated_capacity: x.row.seated_capacity ?? null,
+              standing_capacity: x.row.standing_capacity ?? null,
+              privacy_level: x.row.privacy_level ?? null,
+              noise_level: x.row.noise_level ?? null,
+              a_v: x.row.a_v ?? null,
+              min_spend_estimate: x.row.min_spend_estimate ?? null,
+              score: x.score,
+              reasons: adjustReasonsForCity(x.reasons, isCityMatch),
+              withinRadius: x.withinRadius ?? null,
+              isFitting,
+            };
+          })
           .filter((x) => x.room_name),
         roomsPreview: g.rooms
           .slice(0, 3)

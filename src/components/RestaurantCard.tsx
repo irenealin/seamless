@@ -3,10 +3,14 @@
 export function RestaurantCard({
   item,
   badge,
+  selected,
+  onToggleSelect,
   onClick,
 }: {
   item: any;
   badge?: string;
+  selected?: boolean;
+  onToggleSelect?: () => void;
   onClick?: () => void;
 }) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -32,10 +36,32 @@ export function RestaurantCard({
           .map((p: string) => (p.startsWith("http") ? p : makePublicUrl(p)));
 
   return (
-    <div className="resultCard" onClick={onClick}>
+    <div className="resultCard" onClick={onClick} style={{ position: "relative" }}>
       <div className="heroImg">
         {photos[0] ? <img src={photos[0]} alt="" /> : null}
       </div>
+      {onToggleSelect ? (
+        <button
+          type="button"
+          className="btn btnPrimary"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSelect();
+          }}
+          aria-pressed={selected}
+          style={{
+            position: "absolute",
+            top: 10,
+            right: 10,
+            padding: "6px 10px",
+            fontSize: 12,
+            borderRadius: 999,
+            boxShadow: "0 8px 18px rgba(0,0,0,0.35)",
+          }}
+        >
+          {selected ? "Selected" : "Select"}
+        </button>
+      ) : null}
       <div className="resultBody">
         <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
           <div>

@@ -14,6 +14,7 @@ const InputSchema = z.object({
   vibe: z.string().optional(),
   needsAV: z.boolean().optional(),
   budgetTotal: z.number().optional(),
+  restaurantQuery: z.string().optional(),
 });
 
 export async function POST(req: Request) {
@@ -27,8 +28,18 @@ export async function POST(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const rows = (data ?? []) as RestaurantRoomRow[];
+  const headcount = parsed.data.headcount ?? null;
+  const MAX_CAPACITY_MULTIPLIER = 2;
+  const filteredRows =
+    headcount != null
+      ? rows.filter((row) => {
+          if (!row.seated_capacity) return false;
+          if (row.seated_capacity < headcount) return false;
+          return row.seated_capacity <= Math.ceil(headcount * MAX_CAPACITY_MULTIPLIER);
+        })
+      : rows;
 
-  const ranked = rows
+  const ranked = filteredRows
     .map((row) => {
       const { score, priorityScore, secondaryScore, reasons, distanceMilesAway, withinRadius } =
         scoreRow(row, parsed.data);
@@ -194,7 +205,41 @@ export async function POST(req: Request) {
       return b.score - a.score;
     });
 
-  const eligibleForTop3 = restaurants.filter((r) => {
+  const restaurantQuery = (parsed.data.restaurantQuery ?? "").trim();
+  const queryNorm = restaurantQuery ? normalize(restaurantQuery) : "";
+  const queryTokens = queryNorm.split(" ").filter((t) => t.length >= 3);
+  const matchesName = (name: string) => {
+    const nameNorm = normalize(name);
+    if (!queryNorm) return false;
+    if (nameNorm.includes(queryNorm) || queryNorm.includes(nameNorm)) return true;
+    if (queryTokens.some((t) => nameNorm.includes(t))) return true;
+    const first = queryTokens[0];
+    if (first && nameNorm.startsWith(first)) return true;
+    return false;
+  };
+  const forcedMatches = queryNorm
+    ? restaurants.filter((r) => matchesName(r.restaurant_name ?? ""))
+    : [];
+  const forcedNames = new Set(forcedMatches.map((r) => r.restaurant_name));
+
+  const targetCuisine = forcedMatches[0]?.cuisine ? normalize(forcedMatches[0].cuisine) : "";
+  const targetVibe = forcedMatches[0]?.primary_vibe
+    ? normalize(forcedMatches[0].primary_vibe)
+    : "";
+
+  const similarMatches =
+    targetCuisine || targetVibe
+      ? restaurants.filter((r) => {
+          if (forcedNames.has(r.restaurant_name)) return false;
+          const cuisineNorm = normalize(r.cuisine ?? "");
+          const vibeNorm = normalize(r.primary_vibe ?? "");
+          const cuisineMatch = targetCuisine && cuisineNorm.includes(targetCuisine);
+          const vibeMatch = targetVibe && vibeNorm.includes(targetVibe);
+          return cuisineMatch || vibeMatch;
+        })
+      : [];
+
+  const isEligible = (r: (typeof restaurants)[number]) => {
     if (parsed.data.radiusMiles != null) {
       return r.distanceMiles != null && r.distanceMiles <= parsed.data.radiusMiles;
     }
@@ -202,16 +247,41 @@ export async function POST(req: Request) {
       return matchesCity(r.address);
     }
     return true;
-  });
-  const eligibleNames = new Set(eligibleForTop3.map((r) => r.restaurant_name));
+  };
+
+  const eligibleForTop3 = restaurants.filter((r) => isEligible(r));
   const fallbackTop3 =
     !eligibleForTop3.length && restaurants.length ? restaurants.slice(0, 3) : [];
-  const topRecommendations = eligibleForTop3.length ? eligibleForTop3 : fallbackTop3;
+  let topRecommendations = eligibleForTop3.length ? eligibleForTop3 : fallbackTop3;
+  if (forcedMatches.length) {
+    const combined = [...forcedMatches, ...topRecommendations];
+    const seen = new Set<string>();
+    topRecommendations = combined.filter((r) => {
+      if (seen.has(r.restaurant_name)) return false;
+      seen.add(r.restaurant_name);
+      return true;
+    });
+  }
+  topRecommendations = topRecommendations.slice(0, 3);
+
+  const prioritizedOthers = (() => {
+    const forcedFirst = forcedMatches.length ? forcedMatches : [];
+    const similarNext = similarMatches.filter(
+      (r) => !forcedFirst.some((f) => f.restaurant_name === r.restaurant_name)
+    );
+    if (!forcedFirst.length && !similarNext.length) return restaurants;
+    const seen = new Set([...forcedFirst, ...similarNext].map((r) => r.restaurant_name));
+    const rest = restaurants.filter((r) => !seen.has(r.restaurant_name));
+    return [...forcedFirst, ...similarNext, ...rest];
+  })();
+
+  const topNames = new Set(topRecommendations.map((r) => r.restaurant_name));
 
   return NextResponse.json({
     top3: topRecommendations,
-    others: restaurants
-      .filter((r) => !eligibleNames.has(r.restaurant_name))
+    others: prioritizedOthers
+      .filter((r) => !topNames.has(r.restaurant_name))
+      .filter((r) => isEligible(r))
       .filter((r) => !fallbackTop3.some((f) => f.restaurant_name === r.restaurant_name))
       .slice(0, 12),
     countRestaurants: restaurants.length,

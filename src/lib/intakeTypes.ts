@@ -34,6 +34,7 @@ export const RequirementsSchema = z.object({
   privacyLevel: optionalString,
   noiseLevel: optionalString,
   vibe: optionalString,
+  restaurantQuery: optionalString,
   maxCakeFee: optionalString,
   maxCorkageFee: optionalString,
 });

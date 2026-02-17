@@ -36,6 +36,7 @@ type RestaurantResult = {
   primary_vibe?: string | null;
   vibe_tags?: string | null;
   cuisine?: string | null;
+  cuisinePhrase?: string | null;
 
   a_v?: string | null;
   min_spend_estimate?: number | null;
@@ -185,9 +186,15 @@ function DiscoverPageContent() {
   const [showDefaultHeader, setShowDefaultHeader] = useState(true);
   const [roomIndexes, setRoomIndexes] = useState<Record<string, number>>({});
   const [refreshTick, setRefreshTick] = useState(0);
+  const [selectedRestaurants, setSelectedRestaurants] = useState<
+    Record<string, RestaurantResult>
+  >({});
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const lastManualAreaLabelRef = useRef<string | null>(null);
   const lastGeocodedAreaLabelRef = useRef<string | null>(null);
+  const lastRestaurantQueryRef = useRef<string | null>(null);
+  const lastRestaurantResolveRef = useRef<string | null>(null);
+  const lastDbResolveRef = useRef<string | null>(null);
 
   function setCardRef(name: string) {
     return (el: HTMLDivElement | null) => {
@@ -493,7 +500,52 @@ function DiscoverPageContent() {
     )}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
     void trackCtaEvent("request_quote", item.restaurant_name ?? null).finally(() => {
-      window.location.href = mailto;
+      window.open(mailto, "_blank");
+    });
+  }
+
+  function requestQuoteDraftMulti(items: RestaurantResult[]) {
+    const withEmail = items.filter((item) => item.contact_email);
+    if (!withEmail.length) {
+      alert("No contact emails on file for the selected restaurants.");
+      return;
+    }
+    const mailtos = withEmail.map((item) => {
+      const contactValue = item.contact_email?.trim() ?? "";
+      const stripYear = (value: string) =>
+        value.replace(/,?\s*\b(19|20)\d{2}\b/g, "").trim();
+      const dateNeeded = requirements.dateNeeded ? stripYear(requirements.dateNeeded) : "";
+      const timeNeeded = requirements.timeNeeded ?? "";
+      const dateLabel = dateNeeded || "[DATE]";
+      const timeLabel = timeNeeded || "[TIME]";
+      const dateTimeLine =
+        dateNeeded && timeNeeded ? `${dateNeeded} at ${timeNeeded}` : `${dateLabel} at ${timeLabel}`;
+      const subject = `Private Dining at ${item.restaurant_name} - ${dateLabel}`;
+      const body = `Hi ${item.restaurant_name} Team,\n\nI'm reaching out to inquire about booking a private dining room at ${item.restaurant_name} on ${dateLabel}. ${buildQuoteBody()} Timing: ${dateTimeLine}. Please let me know if this date is available and if the space can accommodate our group. Thank you!\n`;
+      return {
+        restaurantName: item.restaurant_name ?? null,
+        mailto: `mailto:${encodeURIComponent(
+          contactValue
+        )}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
+      };
+    });
+
+    mailtos.forEach((item, idx) => {
+      void trackCtaEvent("request_quote", item.restaurantName);
+      setTimeout(() => {
+        window.open(item.mailto, "_blank");
+      }, idx * 200);
+    });
+  }
+
+  function toggleSelectRestaurant(item: RestaurantResult) {
+    const name = item.restaurant_name ?? "";
+    if (!name) return;
+    setSelectedRestaurants((prev) => {
+      const next = { ...prev };
+      if (next[name]) delete next[name];
+      else next[name] = item;
+      return next;
     });
   }
 
@@ -616,6 +668,7 @@ function DiscoverPageContent() {
       }
       if (Array.isArray(json.missing)) setMissing(json.missing);
       if (typeof json.isComplete === "boolean") setIsComplete(json.isComplete);
+      setShowDefaultHeader(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Something went wrong.";
       setMessages([
@@ -633,6 +686,10 @@ function DiscoverPageContent() {
   const allResults = useMemo(
     () => [...(data?.top3 ?? []), ...(data?.others ?? [])],
     [data]
+  );
+  const selectedList = useMemo(
+    () => Object.values(selectedRestaurants),
+    [selectedRestaurants]
   );
 
   const points = useMemo(
@@ -712,6 +769,7 @@ function DiscoverPageContent() {
     if (requirements.needsAV) payload.needsAV = true;
     if (requirements.maxCakeFee) payload.maxCakeFee = Number(requirements.maxCakeFee);
     if (requirements.maxCorkageFee) payload.maxCorkageFee = Number(requirements.maxCorkageFee);
+    if (requirements.restaurantQuery) payload.restaurantQuery = requirements.restaurantQuery;
 
     const resp = await fetch("/api/recommendations", {
       method: "POST",
@@ -746,9 +804,104 @@ function DiscoverPageContent() {
 
   useDebouncedEffect(() => {
     if (!center) return;
-    if (missingRequired.length) return;
+    if (missingRequired.length && !requirements.restaurantQuery) return;
     getRecommendations();
   }, [center?.lat, center?.lng, requirements, missingRequired.length, refreshTick], 450);
+
+  useEffect(() => {
+    const query = requirements.restaurantQuery?.trim();
+    if (!query) return;
+    if (lastDbResolveRef.current === query) return;
+    if (requirements.areaLabel) return;
+
+    lastDbResolveRef.current = query;
+
+    (async () => {
+      try {
+        const resp = await fetch("/api/rooms/resolve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query }),
+        });
+        const json = (await resp.json()) as {
+          found?: boolean;
+          address?: string | null;
+          lat?: number | null;
+          lng?: number | null;
+        };
+        if (!resp.ok || !json.found) return;
+        if (json.address) {
+          lastManualAreaLabelRef.current = json.address;
+          lastGeocodedAreaLabelRef.current = json.address;
+          setRequirements((prev) => ({ ...prev, areaLabel: json.address }));
+        }
+        if (json.lat != null && json.lng != null) {
+          setCenter({ lat: json.lat, lng: json.lng });
+        }
+      } catch (err) {
+        console.error("Failed to resolve restaurant from DB:", err);
+      }
+    })();
+  }, [requirements.restaurantQuery, requirements.areaLabel]);
+
+  useEffect(() => {
+    const query = requirements.restaurantQuery?.trim();
+    if (!query || !data) return;
+    if (lastRestaurantQueryRef.current === query) return;
+
+    const normalize = (value: string) =>
+      value
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    const queryNorm = normalize(query);
+    const all = [...(data.top3 ?? []), ...(data.others ?? [])];
+    const match =
+      all.find((r) => normalize(r.restaurant_name ?? "").includes(queryNorm)) ?? null;
+    if (match && match.lat != null && match.lng != null) {
+      const addressLabel = match.address ?? null;
+      setCenter({ lat: match.lat, lng: match.lng });
+      if (addressLabel) {
+        lastManualAreaLabelRef.current = addressLabel;
+        lastGeocodedAreaLabelRef.current = addressLabel;
+        setRequirements((prev) => ({ ...prev, areaLabel: addressLabel }));
+      }
+      lastRestaurantQueryRef.current = query;
+      return;
+    }
+
+    if (lastRestaurantResolveRef.current === query) return;
+    lastRestaurantResolveRef.current = query;
+
+    (async () => {
+      try {
+        const resp = await fetch("/api/places/resolve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query }),
+        });
+        const json = (await resp.json()) as {
+          found?: boolean;
+          address?: string | null;
+          lat?: number | null;
+          lng?: number | null;
+        };
+        if (!resp.ok || !json.found || json.lat == null || json.lng == null) return;
+        const addressLabel = json.address ?? null;
+        setCenter({ lat: json.lat, lng: json.lng });
+        if (addressLabel) {
+          lastManualAreaLabelRef.current = addressLabel;
+          lastGeocodedAreaLabelRef.current = addressLabel;
+          setRequirements((prev) => ({ ...prev, areaLabel: addressLabel }));
+        }
+        lastRestaurantQueryRef.current = query;
+      } catch (err) {
+        console.error("Failed to resolve restaurant name:", err);
+      }
+    })();
+  }, [data, requirements.restaurantQuery]);
 
   return (
     <div className="discoverPage">
@@ -1064,7 +1217,12 @@ function DiscoverPageContent() {
                 <div className="resultsGrid">
                   {allSorted.map((r) => (
                     <div key={r.restaurant_name} ref={setCardRef(r.restaurant_name)}>
-                      <RestaurantCard item={r} onClick={() => viewVenue(r)} />
+                      <RestaurantCard
+                        item={r}
+                        selected={Boolean(selectedRestaurants[r.restaurant_name ?? ""])}
+                        onToggleSelect={() => toggleSelectRestaurant(r)}
+                        onClick={() => viewVenue(r)}
+                      />
                     </div>
                   ))}
                 </div>
@@ -1086,6 +1244,8 @@ function DiscoverPageContent() {
                         <RestaurantCard
                           item={r}
                           badge={i < 3 ? `Top ${i + 1}` : undefined}
+                          selected={Boolean(selectedRestaurants[r.restaurant_name ?? ""])}
+                          onToggleSelect={() => toggleSelectRestaurant(r)}
                           onClick={() => viewVenue(r)}
                         />
                       </div>
@@ -1105,7 +1265,12 @@ function DiscoverPageContent() {
                   <div className="resultsGrid">
                     {data.others.map((r) => (
                       <div key={r.restaurant_name} ref={setCardRef(r.restaurant_name)}>
-                        <RestaurantCard item={r} onClick={() => viewVenue(r)} />
+                        <RestaurantCard
+                          item={r}
+                          selected={Boolean(selectedRestaurants[r.restaurant_name ?? ""])}
+                          onToggleSelect={() => toggleSelectRestaurant(r)}
+                          onClick={() => viewVenue(r)}
+                        />
                       </div>
                     ))}
                   </div>
@@ -1129,9 +1294,24 @@ function DiscoverPageContent() {
                   </div>
                 ) : null}
               </div>
-              <button className="modalClose" onClick={() => setSelected(null)} aria-label="Close">
-                ✕
-              </button>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                {selected.restaurant_name ? (
+                  <button
+                    className="btn btnPrimary"
+                    onClick={() => toggleSelectRestaurant(selected)}
+                    style={{ padding: "6px 12px", borderRadius: 999 }}
+                  >
+                    {selectedRestaurants[selected.restaurant_name ?? ""] ? "Selected" : "Select"}
+                  </button>
+                ) : null}
+                <button
+                  className="modalClose"
+                  onClick={() => setSelected(null)}
+                  aria-label="Close"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
             <div className="modalBody">
@@ -1303,9 +1483,26 @@ function DiscoverPageContent() {
               })()}
 
               <div className="row" style={{ marginTop: 16 }}>
-                <button className="btn btnPrimary" onClick={() => requestQuoteDraft(selected)}>
-                  Request Quote
-                </button>
+                {selectedList.length > 1 ? (
+                  <>
+                    <button
+                      className="btn btnPrimary"
+                      onClick={() => requestQuoteDraftMulti(selectedList)}
+                    >
+                      Request Quotes ({selectedList.length})
+                    </button>
+                    <button
+                      className="btn btnGhost"
+                      onClick={() => requestQuoteDraft(selected)}
+                    >
+                      Request Quote (This venue)
+                    </button>
+                  </>
+                ) : (
+                  <button className="btn btnPrimary" onClick={() => requestQuoteDraft(selected)}>
+                    Request Quote
+                  </button>
+                )}
               </div>
             </div>
           </div>
